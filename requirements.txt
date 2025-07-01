@@ -1,3 +1,7 @@
 gunicorn
-gunicorn
 dash
+torch
+flask
+plotly
+numpy
+pandas
