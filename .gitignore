@@ -1,3 +1,4 @@
 data/
 models/*.pkl
 notebooks/data/processed/*.csv
+app/*.pkl
