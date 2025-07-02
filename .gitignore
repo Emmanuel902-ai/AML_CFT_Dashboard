@@ -9,3 +9,4 @@ venv/
 *.log
 *.tar.gz
 *.zip
+models/local_outlier_factor.pkl
