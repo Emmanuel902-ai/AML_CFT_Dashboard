@@ -4,6 +4,7 @@ __pycache__/
 venv/
 .env
 *.csv
+!data/sample_for_dashboard.csv
 .DS_Store
 *.log
 *.tar.gz
