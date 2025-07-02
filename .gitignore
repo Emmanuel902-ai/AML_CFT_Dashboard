@@ -1,4 +1,10 @@
-data/
-models/*.pkl
-notebooks/data/processed/*.csv
-app/*.pkl
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+*.csv
+.DS_Store
+*.log
+*.tar.gz
+*.zip

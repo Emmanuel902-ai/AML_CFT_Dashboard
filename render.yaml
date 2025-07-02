@@ -1,9 +1,8 @@
-
 services:
   - type: web
-    name: aml-dashboard
+    name: aml-cft-dashboard
     env: python
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn app.app:server"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app/app.py
     plan: free
-    branch: main
+
