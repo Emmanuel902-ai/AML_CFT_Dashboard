@@ -9,4 +9,4 @@ services:
       value: 3.8
     - key: PYTHONUNBUFFERED
       value: "1"  # Improves logging
-  pythonVersion: "3.8"  # Explicitly set Python version
+  pythonVersion: "3.8"  # Ensure this line is correctly indented under the service block
