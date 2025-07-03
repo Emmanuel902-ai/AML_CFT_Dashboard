@@ -7,3 +7,5 @@ services:
   envVars:
     - key: PYTHON_VERSION
       value: 3.8
+    - key: PYTHONUNBUFFERED
+      value: "1"  # Helps with logging
