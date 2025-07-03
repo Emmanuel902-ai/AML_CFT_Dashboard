@@ -16,8 +16,8 @@ import joblib
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 # Define constants (updated with correct path)
-MODEL_PATH = "/home/students/Documents/AML CFT_dashboard_project/models"
-TOP_FEATURES = joblib.load("/home/students/Documents/AML CFT_dashboard_project/notebooks/data/processed/top_features.pkl")
+MODEL_PATH = "models"
+TOP_FEATURES = joblib.load("data/processed/top_features.pkl")
 models = {
     "Random Forest": joblib.load(os.path.join(MODEL_PATH, "random_forest.pkl")),
     "Logistic Regression": joblib.load(os.path.join(MODEL_PATH, "logistic_regression.pkl")),

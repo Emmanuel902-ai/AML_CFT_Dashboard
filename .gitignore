@@ -1,18 +1,17 @@
-__pycache__/
+__pycache__
 *.pyc
-.venv/
-venv/
+.venv
+venv
 .env
 *.csv
-!data/sample_for_dashboard.csv
+!sample_for_dashboard.csv  # Include this specific CSV
 .DS_Store
 *.log
 *.tar.gz
 *.zip
-models/local_outlier_factor.pkl
-*.csv
-*.tar.gz
-__pycache__
+data/
+notebooks/
+models/
 *.ipynb
 base64
 client
@@ -24,4 +23,3 @@ os
 pd
 px
 server
-*/
