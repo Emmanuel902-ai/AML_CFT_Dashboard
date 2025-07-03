@@ -1,12 +1,8 @@
 services:
 - type: web
   name: aml-cft-dashboard
-  runtime: python
-  pythonVersion: "3.8"  # Ensure this is at the same level as buildCommand
-  buildCommand: "pip install -r requirements.txt"
+  dockerfilePath: Dockerfile
   startCommand: "gunicorn --bind 0.0.0.0:$PORT app.app:app"
   envVars:
-    - key: PYTHON_VERSION
-      value: "3.8"
     - key: PYTHONUNBUFFERED
-      value: "1"  # Improves logging
+      value: "1"
