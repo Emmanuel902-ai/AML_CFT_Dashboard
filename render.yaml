@@ -2,7 +2,7 @@ services:
 - type: web
   name: aml-cft-dashboard
   runtime: python
-  pythonVersion: "3.8"  # Should be immediately after runtime
+  pythonVersion: "3.8"  # Ensure this is at the same level as buildCommand
   buildCommand: "pip install -r requirements.txt"
   startCommand: "gunicorn --bind 0.0.0.0:$PORT app.app:app"
   envVars:
