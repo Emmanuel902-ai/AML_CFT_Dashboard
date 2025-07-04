@@ -14,6 +14,7 @@ import joblib
 
 # Initialize app
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+server = app.server  # <--- ADD THIS LINE HERE
 
 # Define constants (updated with correct path)
 MODEL_PATH = "models"
@@ -60,7 +61,7 @@ app.layout = html.Div([
     [Output('output_metrics', 'children'),
      Output('prediction_table', 'children'),
      Output('pie_chart', 'figure'),
-     Output('alert-popup', 'children')],  # Alert System: Added output for dynamic alerts
+     Output('alert-popup', 'children')],
     [Input('upload_data', 'contents'), Input('interval-component', 'n_intervals')],
     [State('upload_data', 'filename'),
      State('model_selector', 'value')]
