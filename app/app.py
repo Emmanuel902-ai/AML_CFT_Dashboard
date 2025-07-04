@@ -12,9 +12,9 @@ from sklearn.metrics import classification_report
 import plotly.express as px
 import joblib
 
-# Initialize app
+# Initialize app and set server as WSGI application
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
-server = app.server  # <--- ADD THIS LINE HERE
+server = app.server  # Explicitly define server as the Flask WSGI instance
 
 # Define constants (updated with correct path)
 MODEL_PATH = "models"
