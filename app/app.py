@@ -85,8 +85,7 @@ app.layout = html.Div([
      Output('prediction_table', 'children'),
      Output('pie_chart', 'figure'),
      Output('alert-popup', 'children')],
-    [Input('upload_data', 'contents'),
-     Input('interval-component', 'n_intervals')],
+    [Input('upload_data', 'contents'), Input('interval-component', 'n_intervals')],
     [State('upload_data', 'filename'),
      State('model_selector', 'value')]
 )
@@ -218,8 +217,11 @@ def update_output(contents, n, filename, model_name):
     # Enhanced DataTable to include only available key transaction fields
     key_fields = ['Transaction_ID', 'Sender_account', 'Receiver_account', 'Date', 'Time', 'Amount']
     available_key_fields = [col for col in key_fields if col in df_original.columns]
-    table_columns = [{"name": i, "id": i} for i in available_key_fields + df_original.columns.tolist()]
-    table_data = df_original[available_key_fields + [col for col in df_original.columns if col in TOP_FEATURES]].head(50).to_dict('records')
+    # Remove duplicate 'Date' if it exists from preprocessing
+    columns_to_use = available_key_fields + [col for col in df_original.columns if col in TOP_FEATURES or col in ['Risk_Score', 'Is_laundering', 'Prediction']]
+    columns_to_use = list(dict.fromkeys(columns_to_use))  # Deduplicate while preserving order
+    table_columns = [{"name": i, "id": i} for i in columns_to_use]
+    table_data = df_original[columns_to_use].head(50).to_dict('records')
     table = dash_table.DataTable(
         columns=table_columns,
         data=table_data,
