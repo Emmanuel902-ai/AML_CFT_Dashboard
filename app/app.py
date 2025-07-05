@@ -83,9 +83,10 @@ app.layout = html.Div([
 @callback(
     [Output('output_metrics', 'children'),
      Output('prediction_table', 'children'),
-     Output('pie_chart', 'figure')
+     Output('pie_chart', 'figure'),
      Output('alert-popup', 'children')],
-    [Input('upload_data', 'contents'), Input('interval-component', 'n_intervals')],
+    [Input('upload_data', 'contents'),
+     Input('interval-component', 'n_intervals')],
     [State('upload_data', 'filename'),
      State('model_selector', 'value')]
 )
