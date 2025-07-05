@@ -91,18 +91,8 @@ app.layout = html.Div([
 )
 def update_output(contents, n, filename, model_name):
     print(f"Processing file: {filename} at {datetime.datetime.now()}")
-    # Default output for no upload
     if contents is None or not models:
-        return [
-            html.Div([
-                html.H4("Welcome to AML/CFT Dashboard"),
-                html.P("Please upload a CSV file to start monitoring."),
-                html.P("Supported models: Random Forest, Logistic Regression, HDBSCAN, Isolation Forest.")
-            ]),
-            None,
-            {},
-            None
-        ]
+        return ["Please upload a file or ensure models are available."], None, {}, None
 
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
@@ -224,24 +214,17 @@ def update_output(contents, n, filename, model_name):
             alert
         ])
 
-    # Enhanced DataTable to include available key transaction fields
-    available_columns = [col for col in ['Sender_account', 'Receiver_account', 'Date', 'Time', 'Amount'] if col in df_original.columns]
-    table_columns = [{"name": i, "id": i} for i in available_columns + [col for col in df_original.columns if col in TOP_FEATURES]]
-    table_data = df_original[available_columns + [col for col in df_original.columns if col in TOP_FEATURES]].head(50).to_dict('records')
-    if not table_data:
-        table = html.Div("No data available to display.")
-    else:
-        table = dash_table.DataTable(
-            columns=table_columns,
-            data=table_data,
-            style_table={'overflowX': 'auto'},
-            style_data_conditional=[
-                {'if': {'filter_query': '{Prediction} eq 1'}, 'backgroundColor': '#ffcccc', 'color': 'black'}
-            ],
-            page_size=10
-        )
+    table = dash_table.DataTable(
+        columns=[{"name": i, "id": i} for i in df_original.columns],
+        data=df_original.head(50).to_dict('records'),
+        style_table={'overflowX': 'auto'},
+        style_data_conditional=[
+            {'if': {'filter_query': '{Prediction} eq 1'}, 'backgroundColor': '#ffcccc', 'color': 'black'}
+        ],
+        page_size=10
+    )
 
-    fig = px.pie(df_original, names='Prediction', title=f'Prediction Distribution (Risk Score: {risk_score:.1f}%)') if not df_original.empty else {}
+    fig = px.pie(df_original, names='Prediction', title=f'Prediction Distribution (Risk Score: {risk_score:.1f}%)')
 
     # Alert System: Dynamic in-app alert for high-risk cases
     alert_content = dbc.Alert("High Risk Transaction Detected! Action Required.", color="danger", duration=4000, is_open=True) if risk_score > 50 else None
