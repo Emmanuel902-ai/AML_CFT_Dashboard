@@ -83,7 +83,7 @@ app.layout = html.Div([
 @callback(
     [Output('output_metrics', 'children'),
      Output('prediction_table', 'children'),
-     Output('pie_chart', 'figure'),
+     Output('pie_chart', 'figure')
      Output('alert-popup', 'children')],
     [Input('upload_data', 'contents'), Input('interval-component', 'n_intervals')],
     [State('upload_data', 'filename'),
@@ -214,9 +214,11 @@ def update_output(contents, n, filename, model_name):
             alert
         ])
 
-    # Enhanced DataTable to include key transaction fields
-    table_columns = [{"name": i, "id": i} for i in ['Transaction_ID', 'Sender_account', 'Receiver_account', 'Date', 'Time', 'Amount'] + df_original.columns.tolist()]
-    table_data = df_original[['Transaction_ID', 'Sender_account', 'Receiver_account', 'Date', 'Time', 'Amount'] + [col for col in df_original.columns if col in TOP_FEATURES]].head(50).to_dict('records')
+    # Enhanced DataTable to include only available key transaction fields
+    key_fields = ['Transaction_ID', 'Sender_account', 'Receiver_account', 'Date', 'Time', 'Amount']
+    available_key_fields = [col for col in key_fields if col in df_original.columns]
+    table_columns = [{"name": i, "id": i} for i in available_key_fields + df_original.columns.tolist()]
+    table_data = df_original[available_key_fields + [col for col in df_original.columns if col in TOP_FEATURES]].head(50).to_dict('records')
     table = dash_table.DataTable(
         columns=table_columns,
         data=table_data,
