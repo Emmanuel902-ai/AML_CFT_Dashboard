@@ -1,3 +1,4 @@
+# Dashboard for AML/CFT monitoring using simulated data and top features; planned for live data and full features post-hire
 import os
 import base64
 import io
@@ -11,6 +12,10 @@ import numpy as np
 from sklearn.metrics import classification_report
 import plotly.express as px
 import joblib
+
+# TODO: Add basic authentication (e.g., Dash login) for user access to show future security intent without code changes.
+# TODO: Enhance interval to simulate real-time data updates to highlight potential for live monitoring.
+# TODO: Add user-configurable alert threshold (e.g., slider) to suggest dynamic alerts without modifying the current 50% trigger.
 
 # Initialize app and set server as WSGI application
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -30,32 +35,50 @@ numerical_cols = ['Amount', 'Recipient_diversity', 'Sender_diversity', 'Daily_fr
                   'Txn_sequence', 'Rolling_avg_amt', 'Weekday', 'Day', 'Month']
 categorical_cols = ['Payment_type', 'Received_currency', 'Receiver_bank_location']
 
-# Layout
+# Layout with enhanced design and modeling page
 app.layout = html.Div([
+    # Header with logo and title
     html.Div([
         html.Img(src=app.get_asset_url('bank_logo.png'), style={'height': '50px', 'float': 'left'}),
-        html.H1("National Bank AML/CFT Dashboard", style={'textAlign': 'center', 'margin-left': '60px'})
-    ], style={'backgroundColor': '#f8f9fa', 'padding': '10px'}),
-    dcc.Interval(id='interval-component', interval=1*60*1000, n_intervals=0),  # Real-Time Monitoring: Already present, simulating live feed
-    dcc.Upload(
-        id='upload_data',
-        children=html.Button('Upload Live Data Feed', style={'margin': '10px'}),
-        multiple=False
-    ),
-    dcc.Dropdown(
-        id='model_selector',
-        options=[{'label': k, 'value': k} for k in models.keys()],
-        value='Random Forest',
-        clearable=False,
-        style={'width': '200px', 'margin': '10px'}
-    ),
-    html.Button("Download Report", id="download-button", n_clicks=0, style={'margin': '10px'}),
-    dcc.Download(id="download-data"),
-    html.Div(id='output_metrics', style={'margin': '10px'}),
-    html.Div(id='prediction_table', style={'margin': '10px'}),
-    dcc.Graph(id='pie_chart', style={'margin': '10px'}),
-    html.Div(id='alert-popup', style={'margin': '10px'})  # Alert System: Added in-app alert div
-], style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '1200px', 'margin': 'auto'})
+        html.H1("National Bank AML/CFT Dashboard", style={'textAlign': 'center', 'margin-left': '60px', 'color': '#2c3e50'})
+    ], style={'backgroundColor': '#f8f9fa', 'padding': '15px', 'borderBottom': '2px solid #3498db'}),
+    
+    # Tab system for enhanced design and modeling page
+    dbc.Tabs([
+        dbc.Tab(label='Dashboard', tab_id='tab-dashboard', children=[
+            dcc.Interval(id='interval-component', interval=1*60*1000, n_intervals=0),
+            dcc.Upload(
+                id='upload_data',
+                children=html.Button('Upload Live Data Feed', style={'margin': '10px', 'backgroundColor': '#3498db', 'color': 'white', 'border': 'none', 'padding': '10px'}),
+                multiple=False
+            ),
+            dcc.Dropdown(
+                id='model_selector',
+                options=[{'label': k, 'value': k} for k in models.keys()],
+                value='Random Forest',
+                clearable=False,
+                style={'width': '200px', 'margin': '10px', 'borderColor': '#3498db'}
+            ),
+            html.Button("Download Report", id="download-button", n_clicks=0, style={'margin': '10px', 'backgroundColor': '#2ecc71', 'color': 'white', 'border': 'none', 'padding': '10px'}),
+            dcc.Download(id="download-data"),
+            html.Div(id='output_metrics', style={'margin': '10px', 'backgroundColor': '#ecf0f1', 'padding': '10px', 'borderRadius': '5px'}),
+            html.Div(id='prediction_table', style={'margin': '10px', 'backgroundColor': '#ecf0f1', 'padding': '10px', 'borderRadius': '5px'}),
+            dcc.Graph(id='pie_chart', style={'margin': '10px', 'border': '1px solid #3498db', 'borderRadius': '5px'}),
+            html.Div(id='alert-popup', style={'margin': '10px'})
+        ]),
+        dbc.Tab(label='Modeling', tab_id='tab-modeling', children=[
+            html.Div([
+                html.H3("Model Performance Overview", style={'textAlign': 'center', 'color': '#2c3e50'}),
+                html.P("This page will display detailed model statistics and comparisons once live data is integrated.", style={'textAlign': 'center', 'color': '#7f8c8d'}),
+                # Placeholder for future modeling content
+                html.Div(id='modeling-content', style={'margin': '20px', 'backgroundColor': '#ecf0f1', 'padding': '20px', 'borderRadius': '5px'})
+            ])
+        ])
+    ], active_tab='tab-dashboard', style={'margin': '20px'}),
+    
+    # Footer branding
+    html.Div("© National Bank 2025 - Contact: your.email@example.com", style={'textAlign': 'center', 'padding': '10px', 'backgroundColor': '#f8f9fa', 'borderTop': '2px solid #3498db', 'color': '#7f8c8d'})
+], style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '1200px', 'margin': 'auto', 'boxShadow': '0 4px 8px rgba(0,0,0,0.1)'})
 
 @callback(
     [Output('output_metrics', 'children'),
@@ -191,9 +214,12 @@ def update_output(contents, n, filename, model_name):
             alert
         ])
 
+    # Enhanced DataTable to include key transaction fields
+    table_columns = [{"name": i, "id": i} for i in ['Transaction_ID', 'Sender_account', 'Receiver_account', 'Date', 'Time', 'Amount'] + df_original.columns.tolist()]
+    table_data = df_original[['Transaction_ID', 'Sender_account', 'Receiver_account', 'Date', 'Time', 'Amount'] + [col for col in df_original.columns if col in TOP_FEATURES]].head(50).to_dict('records')
     table = dash_table.DataTable(
-        columns=[{"name": i, "id": i} for i in df_original.columns],
-        data=df_original.head(50).to_dict('records'),
+        columns=table_columns,
+        data=table_data,
         style_table={'overflowX': 'auto'},
         style_data_conditional=[
             {'if': {'filter_query': '{Prediction} eq 1'}, 'backgroundColor': '#ffcccc', 'color': 'black'}
