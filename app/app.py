@@ -5,7 +5,7 @@ import io
 import datetime
 import time
 import dash
-from dash import html, dcc, dash_table, Output, Input, State, callback
+from dash import html, dcc, dash_table, Output, Input, State, callback, ctx
 import dash_bootstrap_components as dbc
 import pandas as pd
 import numpy as np
@@ -59,12 +59,23 @@ app.layout = html.Div([
                 clearable=False,
                 style={'width': '200px', 'margin': '10px', 'borderColor': '#3498db'}
             ),
+            dcc.Dropdown(id='filter-sender', options=[], placeholder="Filter by Sender Account", style={'width': '200px', 'margin': '10px'}),
+            dcc.Dropdown(id='filter-prediction', options=[{'label': 'All', 'value': 'all'}, {'label': 'Laundering', 'value': 1}, {'label': 'Not Laundering', 'value': 0}], value='all', style={'width': '200px', 'margin': '10px'}),
             html.Button("Download Report", id="download-button", n_clicks=0, style={'margin': '10px', 'backgroundColor': '#2ecc71', 'color': 'white', 'border': 'none', 'padding': '10px'}),
             dcc.Download(id="download-data"),
             html.Div(id='output_metrics', style={'margin': '10px', 'backgroundColor': '#ecf0f1', 'padding': '10px', 'borderRadius': '5px'}),
             html.Div(id='prediction_table', style={'margin': '10px', 'backgroundColor': '#ecf0f1', 'padding': '10px', 'borderRadius': '5px'}),
             dcc.Graph(id='pie_chart', style={'margin': '10px', 'border': '1px solid #3498db', 'borderRadius': '5px'}),
-            html.Div(id='alert-popup', style={'margin': '10px'})
+            dcc.Graph(id='metrics-chart', style={'margin': '10px', 'border': '1px solid #3498db', 'borderRadius': '5px'}),
+            html.Div(id='alert-popup', style={'margin': '10px'}),
+            html.Div(id='alert-history-log', style={'margin': '10px', 'backgroundColor': '#ecf0f1', 'padding': '10px', 'borderRadius': '5px'}),
+            html.Div(id='upload-feedback', style={'margin': '10px', 'backgroundColor': '#ecf0f1', 'padding': '10px', 'borderRadius': '5px'}),
+            dcc.Store(id='alert-history', storage_type='memory'),
+            dbc.Modal([
+                dbc.ModalHeader("Transaction Details"),
+                dbc.ModalBody(id='transaction-details'),
+                dbc.ModalFooter(dbc.Button("Close", id='close-modal', className="ml-auto"))
+            ], id='modal', is_open=False)
         ]),
         dbc.Tab(label='Modeling', tab_id='tab-modeling', children=[
             html.Div([
@@ -84,23 +95,31 @@ app.layout = html.Div([
     [Output('output_metrics', 'children'),
      Output('prediction_table', 'children'),
      Output('pie_chart', 'figure'),
-     Output('alert-popup', 'children')],
+     Output('alert-popup', 'children'),
+     Output('alert-history-log', 'children'),
+     Output('metrics-chart', 'figure'),
+     Output('upload-feedback', 'children'),
+     Output('filter-sender', 'options')],
     [Input('upload_data', 'contents'), Input('interval-component', 'n_intervals')],
     [State('upload_data', 'filename'),
-     State('model_selector', 'value')]
+     State('model_selector', 'value'),
+     State('alert-history', 'children'),
+     State('filter-sender', 'value'),
+     State('filter-prediction', 'value')]
 )
-def update_output(contents, n, filename, model_name):
+def update_output(contents, n, filename, model_name, alert_history, sender_filter, pred_filter):
     print(f"Processing file: {filename} at {datetime.datetime.now()}")
     if contents is None or not models:
-        return ["Please upload a file or ensure models are available."], None, {}, None
+        return ["Please upload a file or ensure models are available."], None, {}, None, alert_history, {}, html.P("No file uploaded yet.", style={'color': 'gray'}), []
 
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
 
     try:
         df = pd.read_csv(io.StringIO(decoded.decode('utf-8-sig')))
+        feedback = html.P("Data uploaded successfully!", style={'color': 'green'})
     except Exception as e:
-        return [f"❌ Failed to parse CSV: {e}"], None, {}, None
+        return [f"❌ Failed to parse CSV: {e}"], None, {}, None, alert_history, {}, html.P(f"Upload failed: {e}", style={'color': 'red'}), []
 
     df_original = df.copy()
 
@@ -156,10 +175,10 @@ def update_output(contents, n, filename, model_name):
             y_true = df['Is_laundering'] if 'Is_laundering' in df.columns else None
             X = df.reindex(columns=TOP_FEATURES, fill_value=0)
         except Exception as e:
-            return [f"❌ Preprocessing failed: {e}"], None, {}, None
+            return [f"❌ Preprocessing failed: {e}"], None, {}, None, alert_history, {}, feedback, []
 
     if X.shape[1] != len(TOP_FEATURES):
-        return [f"❌ Feature mismatch: Expected {len(TOP_FEATURES)} features, got {X.shape[1]}"], None, {}, None
+        return [f"❌ Feature mismatch: Expected {len(TOP_FEATURES)} features, got {X.shape[1]}"], None, {}, None, alert_history, {}, feedback, []
 
     print(f"X shape: {X.shape}")
     print(f"X columns: {X.columns.tolist()}")
@@ -169,7 +188,7 @@ def update_output(contents, n, filename, model_name):
 
     model = models.get(model_name)
     if model is None:
-        return [f"❌ Model {model_name} not loaded."], None, {}, None
+        return [f"❌ Model {model_name} not loaded."], None, {}, None, alert_history, {}, feedback, []
 
     try:
         if model_name == "HDBSCAN":
@@ -179,8 +198,14 @@ def update_output(contents, n, filename, model_name):
             y_pred = model.predict(X)
             if model_name == "Isolation Forest":
                 y_pred = np.where(y_pred == -1, 1, 0)
+            if model_name in ["Random Forest", "Logistic Regression"]:
+                try:
+                    prob = model.predict_proba(X)[:, 1]  # Probability of class 1 (laundering)
+                    df_original['Confidence'] = prob
+                except:
+                    pass  # Skip if predict_proba fails
     except Exception as e:
-        return [f"❌ Model prediction failed: {e}"], None, {}, None
+        return [f"❌ Model prediction failed: {e}"], None, {}, None, alert_history, {}, feedback, []
 
     print(f"y_pred distribution: {pd.Series(y_pred).value_counts()}")
     print(f"Unique predictions: {np.unique(y_pred)}")
@@ -223,11 +248,15 @@ def update_output(contents, n, filename, model_name):
     # Enhanced DataTable to include only available key transaction fields
     key_fields = ['Transaction_ID', 'Sender_account', 'Receiver_account', 'Date', 'Time', 'Amount']
     available_key_fields = [col for col in key_fields if col in df_original.columns]
-    # Remove duplicate 'Date' if it exists from preprocessing
-    columns_to_use = available_key_fields + [col for col in df_original.columns if col in TOP_FEATURES or col in ['Risk_Score', 'Is_laundering', 'Prediction']]
+    columns_to_use = available_key_fields + [col for col in df_original.columns if col in TOP_FEATURES or col in ['Risk_Score', 'Is_laundering', 'Prediction', 'Confidence']]
     columns_to_use = list(dict.fromkeys(columns_to_use))  # Deduplicate while preserving order
     table_columns = [{"name": i, "id": i} for i in columns_to_use]
-    table_data = df_original[columns_to_use].head(50).to_dict('records')
+    filtered_data = df_original[columns_to_use].head(50)
+    if sender_filter:
+        filtered_data = filtered_data[filtered_data['Sender_account'] == int(sender_filter)]
+    if pred_filter != 'all':
+        filtered_data = filtered_data[filtered_data['Prediction'] == int(pred_filter)]
+    table_data = filtered_data.to_dict('records')
     table = dash_table.DataTable(
         columns=table_columns,
         data=table_data,
@@ -235,7 +264,8 @@ def update_output(contents, n, filename, model_name):
         style_data_conditional=[
             {'if': {'filter_query': '{Prediction} eq 1'}, 'backgroundColor': '#ffcccc', 'color': 'black'}
         ],
-        page_size=10
+        page_size=10,
+        id='transaction-table'
     )
 
     fig = px.pie(df_original, names='Prediction', title=f'Prediction Distribution (Risk Score: {risk_score:.1f}%)')
@@ -252,7 +282,52 @@ def update_output(contents, n, filename, model_name):
         html.P(f"Flagged Transactions: {flagged_transactions} ({risk_score:.1f}%)")
     ])
 
-    return detailed_metrics, table, fig, alert_content
+    # Alert History
+    if risk_score > 50:
+        alert_history = [html.P(f"Alert at {datetime.datetime.now()}: Risk Score {risk_score:.1f}%", style={'color': 'red'})]
+        if alert_history:
+            alert_history = alert_history + (alert_history if not isinstance(alert_history, list) else [])
+        return detailed_metrics, table, fig, alert_content, alert_history, metrics_fig, feedback, df_original['Sender_account'].dropna().unique()
+
+    # Metrics Chart
+    if y_true is not None:
+        report = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
+        metrics_fig = {
+            'data': [{
+                'x': ['Precision', 'Recall', 'F1 Score'],
+                'y': [report['1']['precision'], report['1']['recall'], report['1']['f1-score']],
+                'type': 'bar',
+                'marker': {'color': '#3498db'}
+            }],
+            'layout': {'title': 'Model Performance Metrics'}
+        }
+    else:
+        metrics_fig = {}
+
+    return detailed_metrics, table, fig, alert_content, alert_history, metrics_fig, feedback, df_original['Sender_account'].dropna().unique()
+
+@callback(
+    [Output('modal', 'is_open'),
+     Output('transaction-details', 'children')],
+    [Input('transaction-table', 'active_cell')],
+    [State('modal', 'is_open'),
+     State('transaction-table', 'derived_virtual_data')]
+)
+def toggle_modal(active_cell, is_open, data):
+    if active_cell and data:
+        row = data[active_cell['row']]
+        details = [html.P(f"{k}: {v}") for k, v in row.items()]
+        return not is_open, details
+    return is_open, []
+
+@callback(
+    Output('modal', 'is_open'),
+    Input('close-modal', 'n_clicks'),
+    State('modal', 'is_open'),
+    prevent_initial_call=True
+)
+def close_modal(n, is_open):
+    return not is_open
 
 @callback(
     Output("download-data", "data"),
