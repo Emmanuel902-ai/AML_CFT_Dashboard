@@ -112,7 +112,9 @@ def update_output(contents, n, filename, model_name):
             if X.shape[0] > 10000:
                 X = X.sample(n=10000, random_state=43)
                 print("Dataset reduced to 10,000 rows for performance.")
+            # Validate and clean Date
             df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+            df = df.dropna(subset=['Date'])  # Remove rows with invalid dates
             df['Time'] = pd.to_datetime(df['Time'], format='%H:%M:%S', errors='coerce')
             df = df.sort_values(by=['Sender_account', 'Date', 'Time'])
             df['Total_inflow'] = df.groupby('Receiver_account')['Amount'].cumsum()
@@ -137,8 +139,12 @@ def update_output(contents, n, filename, model_name):
             df['Day'] = df['Date'].dt.day
             df['Month'] = df['Date'].dt.month
             df = df.drop(columns=['Time', 'Laundering_type'] if 'Laundering_type' in df.columns else ['Time'])
-            df['Sender_account'] = df['Sender_account'].astype('int32')
-            df['Receiver_account'] = df['Receiver_account'].astype('int32')
+            # Ensure non-negative values with handling for non-numeric Sender_account
+            df['Sender_account'] = pd.to_numeric(df['Sender_account'], errors='coerce').fillna(0).abs().astype('int32')
+            df['Receiver_account'] = pd.to_numeric(df['Receiver_account'], errors='coerce').fillna(0).abs().astype('int32')
+            df['Weekday'] = df['Weekday'].apply(lambda x: x if pd.notna(x) and 0 <= x <= 6 else 0)
+            df['Day'] = df['Day'].apply(lambda x: x if pd.notna(x) and 1 <= x <= 31 else 1)
+            df['Month'] = df['Month'].apply(lambda x: x if pd.notna(x) and 1 <= x <= 12 else 1)
             df['Amount'] = df['Amount'].astype('float32')
             if 'Is_laundering' in df.columns:
                 df['Is_laundering'] = df['Is_laundering'].astype('int8')
