@@ -40,7 +40,7 @@ app.layout = html.Div([
     # Header with logo and title
     html.Div([
         html.Img(src=app.get_asset_url('bank_logo.png'), style={'height': '50px', 'float': 'left'}),
-        html.H1("National Bank AML/CFT Dashboard", style={'textAlign': 'center', 'margin-left': '60px', 'color': '#2c3e50'})
+        html.H1("Bank AML/CFT Dashboard", style={'textAlign': 'center', 'margin-left': '60px', 'color': '#2c3e50'})
     ], style={'backgroundColor': '#f8f9fa', 'padding': '15px', 'borderBottom': '2px solid #3498db'}),
     
     # Tab system for enhanced design and modeling page
@@ -77,7 +77,7 @@ app.layout = html.Div([
     ], active_tab='tab-dashboard', style={'margin': '20px'}),
     
     # Footer branding
-    html.Div("© National Bank 2025 - Contact: your.email@example.com", style={'textAlign': 'center', 'padding': '10px', 'backgroundColor': '#f8f9fa', 'borderTop': '2px solid #3498db', 'color': '#7f8c8d'})
+    html.Div("© Bank 2025 - Contact: emmynahimana1999@gmail.com", style={'textAlign': 'center', 'padding': '10px', 'backgroundColor': '#f8f9fa', 'borderTop': '2px solid #3498db', 'color': '#7f8c8d'})
 ], style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '1200px', 'margin': 'auto', 'boxShadow': '0 4px 8px rgba(0,0,0,0.1)'})
 
 @callback(
@@ -214,9 +214,12 @@ def update_output(contents, n, filename, model_name):
             alert
         ])
 
+    # Enhanced DataTable to include key transaction fields
+    table_columns = [{"name": i, "id": i} for i in ['Transaction_ID', 'Sender_account', 'Receiver_account', 'Date', 'Time', 'Amount'] + df_original.columns.tolist()]
+    table_data = df_original[['Transaction_ID', 'Sender_account', 'Receiver_account', 'Date', 'Time', 'Amount'] + [col for col in df_original.columns if col in TOP_FEATURES]].head(50).to_dict('records')
     table = dash_table.DataTable(
-        columns=[{"name": i, "id": i} for i in df_original.columns],
-        data=df_original.head(50).to_dict('records'),
+        columns=table_columns,
+        data=table_data,
         style_table={'overflowX': 'auto'},
         style_data_conditional=[
             {'if': {'filter_query': '{Prediction} eq 1'}, 'backgroundColor': '#ffcccc', 'color': 'black'}
