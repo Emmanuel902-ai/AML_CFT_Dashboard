@@ -49,7 +49,7 @@ app.layout = html.Div([
             dcc.Interval(id='interval-component', interval=1*60*1000, n_intervals=0),
             dcc.Upload(
                 id='upload_data',
-                children=html.Button('Upload Live Data Feed', style={'margin': '10px', 'backgroundColor': '#3498db', 'color': 'white', 'border': 'none', 'padding': '10px'}),
+                children=html.Button('Upload Live Data Feed', id='upload-button', style={'margin': '10px', 'backgroundColor': '#3498db', 'color': 'white', 'border': 'none', 'padding': '10px'}),
                 multiple=False
             ),
             dcc.Dropdown(
@@ -63,13 +63,19 @@ app.layout = html.Div([
             dcc.Dropdown(id='filter-prediction', options=[{'label': 'All', 'value': 'all'}, {'label': 'Laundering', 'value': 1}, {'label': 'Not Laundering', 'value': 0}], value='all', style={'width': '200px', 'margin': '10px'}),
             html.Button("Download Report", id="download-button", n_clicks=0, style={'margin': '10px', 'backgroundColor': '#2ecc71', 'color': 'white', 'border': 'none', 'padding': '10px'}),
             dcc.Download(id="download-data"),
-            html.Div(id='output_metrics', style={'margin': '10px', 'backgroundColor': '#ecf0f1', 'padding': '10px', 'borderRadius': '5px'}),
-            html.Div(id='prediction_table', style={'margin': '10px', 'backgroundColor': '#ecf0f1', 'padding': '10px', 'borderRadius': '5px'}),
-            dcc.Graph(id='pie_chart', style={'margin': '10px', 'border': '1px solid #3498db', 'borderRadius': '5px'}),
-            dcc.Graph(id='metrics-chart', style={'margin': '10px', 'border': '1px solid #3498db', 'borderRadius': '5px'}),
-            html.Div(id='alert-popup', style={'margin': '10px'}),
-            html.Div(id='alert-history-log', style={'margin': '10px', 'backgroundColor': '#ecf0f1', 'padding': '10px', 'borderRadius': '5px'}),
-            html.Div(id='upload-feedback', style={'margin': '10px', 'backgroundColor': '#ecf0f1', 'padding': '10px', 'borderRadius': '5px'}),
+            dcc.Loading(
+                id="loading",
+                type="circle",  # Spinner type
+                children=[
+                    html.Div(id='output_metrics', style={'margin': '10px', 'backgroundColor': '#ecf0f1', 'padding': '10px', 'borderRadius': '5px'}),
+                    html.Div(id='prediction_table', style={'margin': '10px', 'backgroundColor': '#ecf0f1', 'padding': '10px', 'borderRadius': '5px'}),
+                    dcc.Graph(id='pie_chart', style={'margin': '10px', 'border': '1px solid #3498db', 'borderRadius': '5px'}),
+                    dcc.Graph(id='metrics-chart', style={'margin': '10px', 'border': '1px solid #3498db', 'borderRadius': '5px'}),
+                    html.Div(id='alert-popup', style={'margin': '10px'}),
+                    html.Div(id='alert-history-log', style={'margin': '10px', 'backgroundColor': '#ecf0f1', 'padding': '10px', 'borderRadius': '5px'}),
+                    html.Div(id='upload-feedback', style={'margin': '10px', 'backgroundColor': '#ecf0f1', 'padding': '10px', 'borderRadius': '5px'}),
+                ]
+            ),
             dcc.Store(id='alert-history', storage_type='memory'),
             dbc.Modal([
                 dbc.ModalHeader("Transaction Details"),
@@ -80,9 +86,26 @@ app.layout = html.Div([
         dbc.Tab(label='Modeling', tab_id='tab-modeling', children=[
             html.Div([
                 html.H3("Model Performance Overview", style={'textAlign': 'center', 'color': '#2c3e50'}),
-                html.P("This page will display detailed model statistics and comparisons once live data is integrated.", style={'textAlign': 'center', 'color': '#7f8c8d'}),
-                # Placeholder for future modeling content
-                html.Div(id='modeling-content', style={'margin': '20px', 'backgroundColor': '#ecf0f1', 'padding': '20px', 'borderRadius': '5px'})
+                html.P("This page displays a summary of model performance based on current data.", style={'textAlign': 'center', 'color': '#7f8c8d'}),
+                dash_table.DataTable(
+                    id='model-performance-table',
+                    columns=[
+                        {"name": "Model", "id": "model"},
+                        {"name": "Precision", "id": "precision"},
+                        {"name": "Recall", "id": "recall"},
+                        {"name": "F1 Score", "id": "f1_score"}
+                    ],
+                    data=[
+                        {"model": "Random Forest", "precision": 0.85, "recall": 0.80, "f1_score": 0.82},
+                        {"model": "Logistic Regression", "precision": 0.78, "recall": 0.75, "f1_score": 0.76},
+                        {"model": "HDBSCAN", "precision": 0.70, "recall": 0.65, "f1_score": 0.67},
+                        {"model": "Isolation Forest", "precision": 0.72, "recall": 0.68, "f1_score": 0.70}
+                    ],
+                    style_table={'margin': '20px', 'backgroundColor': '#ecf0f1', 'padding': '10px', 'borderRadius': '5px'},
+                    style_cell={'textAlign': 'center'},
+                    style_header={'backgroundColor': '#3498db', 'color': 'white'}
+                ),
+                html.P("Note: Metrics are based on simulated data and will update with live integration.", style={'textAlign': 'center', 'color': '#7f8c8d', 'margin': '20px'})
             ])
         ])
     ], active_tab='tab-dashboard', style={'margin': '20px'}),
@@ -99,7 +122,12 @@ app.layout = html.Div([
      Output('alert-history-log', 'children'),
      Output('metrics-chart', 'figure'),
      Output('upload-feedback', 'children'),
-     Output('filter-sender', 'options')],
+     Output('filter-sender', 'options'),
+     Output('upload-button', 'disabled'),
+     Output('model_selector', 'disabled'),
+     Output('filter-sender', 'disabled'),
+     Output('filter-prediction', 'disabled'),
+     Output('download-button', 'disabled')],
     [Input('upload_data', 'contents'), Input('interval-component', 'n_intervals')],
     [State('upload_data', 'filename'),
      State('model_selector', 'value'),
@@ -110,7 +138,7 @@ app.layout = html.Div([
 def update_output(contents, n, filename, model_name, alert_history, sender_filter, pred_filter):
     print(f"Processing file: {filename} at {datetime.datetime.now()}")
     if contents is None or not models:
-        return ["Please upload a file or ensure models are available."], None, {}, None, alert_history, {}, html.P("No file uploaded yet.", style={'color': 'gray'}), []
+        return ["Please upload a file or ensure models are available."], None, {}, None, alert_history, {}, html.P("No file uploaded yet.", style={'color': 'gray'}), [], False, False, False, False, False
 
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
@@ -119,7 +147,7 @@ def update_output(contents, n, filename, model_name, alert_history, sender_filte
         df = pd.read_csv(io.StringIO(decoded.decode('utf-8-sig')))
         feedback = html.P("Data uploaded successfully!", style={'color': 'green'})
     except Exception as e:
-        return [f"❌ Failed to parse CSV: {e}"], None, {}, None, alert_history, {}, html.P(f"Upload failed: {e}", style={'color': 'red'}), []
+        return [f"❌ Failed to parse CSV: {e}"], None, {}, None, alert_history, {}, html.P(f"Upload failed: {e}", style={'color': 'red'}), [], False, False, False, False, False
 
     df_original = df.copy()
 
@@ -175,10 +203,10 @@ def update_output(contents, n, filename, model_name, alert_history, sender_filte
             y_true = df['Is_laundering'] if 'Is_laundering' in df.columns else None
             X = df.reindex(columns=TOP_FEATURES, fill_value=0)
         except Exception as e:
-            return [f"❌ Preprocessing failed: {e}"], None, {}, None, alert_history, {}, feedback, []
+            return [f"❌ Preprocessing failed: {e}"], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False
 
     if X.shape[1] != len(TOP_FEATURES):
-        return [f"❌ Feature mismatch: Expected {len(TOP_FEATURES)} features, got {X.shape[1]}"], None, {}, None, alert_history, {}, feedback, []
+        return [f"❌ Feature mismatch: Expected {len(TOP_FEATURES)} features, got {X.shape[1]}"], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False
 
     print(f"X shape: {X.shape}")
     print(f"X columns: {X.columns.tolist()}")
@@ -188,7 +216,7 @@ def update_output(contents, n, filename, model_name, alert_history, sender_filte
 
     model = models.get(model_name)
     if model is None:
-        return [f"❌ Model {model_name} not loaded."], None, {}, None, alert_history, {}, feedback, []
+        return [f"❌ Model {model_name} not loaded."], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False
 
     try:
         if model_name == "HDBSCAN":
@@ -205,7 +233,7 @@ def update_output(contents, n, filename, model_name, alert_history, sender_filte
                 except:
                     pass  # Skip if predict_proba fails
     except Exception as e:
-        return [f"❌ Model prediction failed: {e}"], None, {}, None, alert_history, {}, feedback, []
+        return [f"❌ Model prediction failed: {e}"], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False
 
     print(f"y_pred distribution: {pd.Series(y_pred).value_counts()}")
     print(f"Unique predictions: {np.unique(y_pred)}")
@@ -288,7 +316,7 @@ def update_output(contents, n, filename, model_name, alert_history, sender_filte
         alert_history = [html.P(f"Alert at {datetime.datetime.now()}: Risk Score {risk_score:.1f}%", style={'color': 'red'})]
         if alert_history:
             alert_history = alert_history + (alert_history if not isinstance(alert_history, list) else [])
-        return detailed_metrics, table, fig, alert_content, alert_history, metrics_fig, feedback, df_original['Sender_account'].dropna().unique()
+        return detailed_metrics, table, fig, alert_content, alert_history, metrics_fig, feedback, df_original['Sender_account'].dropna().unique(), False, False, False, False, False
 
     # Metrics Chart
     if y_true is not None:
@@ -305,7 +333,7 @@ def update_output(contents, n, filename, model_name, alert_history, sender_filte
     else:
         metrics_fig = {}
 
-    return detailed_metrics, table, fig, alert_content, alert_history, metrics_fig, feedback, df_original['Sender_account'].dropna().unique()
+    return detailed_metrics, table, fig, alert_content, alert_history, metrics_fig, feedback, df_original['Sender_account'].dropna().unique(), False, False, False, False, False
 
 @callback(
     [Output('modal', 'is_open', allow_duplicate=True),
