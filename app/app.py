@@ -94,17 +94,13 @@ app.layout = html.Div([
                         {"name": "Recall", "id": "recall"},
                         {"name": "F1 Score", "id": "f1_score"}
                     ],
-                    data=[
-                        {"model": "Random Forest", "precision": 0.85, "recall": 0.80, "f1_score": 0.82},
-                        {"model": "Logistic Regression", "precision": 0.78, "recall": 0.75, "f1_score": 0.76},
-                        {"model": "HDBSCAN", "precision": 0.70, "recall": 0.65, "f1_score": 0.67},
-                        {"model": "Isolation Forest", "precision": 0.72, "recall": 0.68, "f1_score": 0.70}
-                    ],
+                    data=[],
                     style_table={'margin': '20px', 'backgroundColor': '#ecf0f1', 'padding': '10px', 'borderRadius': '5px'},
                     style_cell={'textAlign': 'center'},
                     style_header={'backgroundColor': '#3498db', 'color': 'white'}
                 ),
-                html.P("Note: Metrics are based on simulated data and will update with live integration.", style={'textAlign': 'center', 'color': '#7f8c8d', 'margin': '20px'})
+                html.P("Note: Metrics are based on simulated data and will update with live integration.", style={'textAlign': 'center', 'color': '#7f8c8d', 'margin': '20px'}),
+                dcc.Store(id='model-performance-data', storage_type='memory', data={})
             ])
         ])
     ], active_tab='tab-dashboard', style={'margin': '20px'}),
@@ -126,19 +122,22 @@ app.layout = html.Div([
      Output('model_selector', 'disabled'),
      Output('filter-sender', 'disabled'),
      Output('filter-prediction', 'disabled'),
-     Output('download-button', 'disabled')],
+     Output('download-button', 'disabled'),
+     Output('model-performance-data', 'data', allow_duplicate=True)],
     [Input('submit-button', 'n_clicks'),
      Input('upload_data', 'contents'),
      Input('model_selector', 'value'),
      Input('filter-sender', 'value'),
      Input('filter-prediction', 'value')],
     [State('upload_data', 'filename'),
-     State('alert-history', 'data')]
+     State('alert-history', 'data'),
+     State('model-performance-data', 'data')],
+    prevent_initial_call=True
 )
-def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_filter, filename, alert_history):
+def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_filter, filename, alert_history, model_performance_data):
     print(f"Processing file: {filename} at {datetime.datetime.now()}")
     if contents is None or not models or not submit_n_clicks:
-        return ["Please upload a file, select a model, and click Submit to load data.", html.P("Interpretation: Upload data and submit to see Precision (accuracy of positive predictions), Recall (capture of actual positives), F1 Score (balance of both), and Risk Score (percentage of flagged transactions). Modeling page scores are based on simulated data and may differ due to real-time data variations.")], None, {}, None, alert_history, {}, html.P("No file uploaded yet or submit not clicked.", style={'color': 'gray'}), [], False, False, False, False, False
+        return ["Please upload a file, select a model, and click Submit to load data.", html.P("Interpretation: Upload data and submit to see Precision (accuracy of positive predictions), Recall (capture of actual positives), F1 Score (balance of both), and Risk Score (percentage of flagged transactions). Modeling page scores are based on simulated data and may differ due to real-time data variations.")], None, {}, None, alert_history, {}, html.P("No file uploaded yet or submit not clicked.", style={'color': 'gray'}), [], False, False, False, False, False, model_performance_data
 
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
@@ -147,7 +146,7 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
         df = pd.read_csv(io.StringIO(decoded.decode('utf-8-sig')))
         feedback = html.P("Data uploaded successfully!", style={'color': 'green'})
     except Exception as e:
-        return [f"❌ Failed to parse CSV: {e}", html.P("Interpretation: Ensure the uploaded file is a valid CSV with required columns.")], None, {}, None, alert_history, {}, html.P(f"Upload failed: {e}", style={'color': 'red'}), [], False, False, False, False, False
+        return [f"❌ Failed to parse CSV: {e}", html.P("Interpretation: Ensure the uploaded file is a valid CSV with required columns.")], None, {}, None, alert_history, {}, html.P(f"Upload failed: {e}", style={'color': 'red'}), [], False, False, False, False, False, model_performance_data
 
     df_original = df.copy()
 
@@ -203,10 +202,10 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
             y_true = df['Is_laundering'] if 'Is_laundering' in df.columns else None
             X = df.reindex(columns=TOP_FEATURES, fill_value=0)
         except Exception as e:
-            return [f"❌ Preprocessing failed: {e}", html.P("Interpretation: Check data integrity or column names.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False
+            return [f"❌ Preprocessing failed: {e}", html.P("Interpretation: Check data integrity or column names.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, model_performance_data
 
     if X.shape[1] != len(TOP_FEATURES):
-        return [f"❌ Feature mismatch: Expected {len(TOP_FEATURES)} features, got {X.shape[1]}", html.P("Interpretation: Ensure all required features are present in the uploaded data.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False
+        return [f"❌ Feature mismatch: Expected {len(TOP_FEATURES)} features, got {X.shape[1]}", html.P("Interpretation: Ensure all required features are present in the uploaded data.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, model_performance_data
 
     print(f"X shape: {X.shape}")
     print(f"X columns: {X.columns.tolist()}")
@@ -216,7 +215,7 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
 
     model = models.get(model_name)
     if model is None:
-        return [f"❌ Model {model_name} not loaded.", html.P("Interpretation: Model loading failed; verify model files.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False
+        return [f"❌ Model {model_name} not loaded.", html.P("Interpretation: Model loading failed; verify model files.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, model_performance_data
 
     try:
         if model_name == "HDBSCAN":
@@ -233,7 +232,7 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
                 except:
                     pass  # Skip if predict_proba fails
     except Exception as e:
-        return [f"❌ Model prediction failed: {e}", html.P("Interpretation: Prediction error; check model compatibility with data.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False
+        return [f"❌ Model prediction failed: {e}", html.P("Interpretation: Prediction error; check model compatibility with data.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, model_performance_data
 
     print(f"y_pred distribution: {pd.Series(y_pred).value_counts()}")
     print(f"Unique predictions: {np.unique(y_pred)}")
@@ -319,7 +318,7 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
         alert_history = [html.P(f"Alert at {datetime.datetime.now()}: Risk Score {risk_score:.1f}%", style={'color': 'red'})]
         if alert_history:
             alert_history = alert_history + (alert_history if not isinstance(alert_history, list) else [])
-        return detailed_metrics, table, fig, alert_content, alert_history, metrics_fig, feedback, df_original['Sender_account'].dropna().unique(), False, False, False, False, False
+        return detailed_metrics, table, fig, alert_content, alert_history, metrics_fig, feedback, df_original['Sender_account'].dropna().unique(), False, False, False, False, False, model_performance_data
 
     # Metrics Chart
     if y_true is not None:
@@ -333,10 +332,45 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
             }],
             'layout': {'title': 'Model Performance Metrics'}
         }
+        # Update model performance data for all models
+        performance_data = {}
+        for model_name in models.keys():
+            model = models[model_name]
+            try:
+                if model_name == "HDBSCAN":
+                    labels = model.fit_predict(X)
+                    y_pred_model = (labels == -1).astype(int)
+                else:
+                    y_pred_model = model.predict(X)
+                    if model_name == "Isolation Forest":
+                        y_pred_model = np.where(y_pred_model == -1, 1, 0)
+                report_model = classification_report(y_true, y_pred_model, output_dict=True, zero_division=0)
+                performance_data[model_name] = {
+                    'precision': report_model['1']['precision'],
+                    'recall': report_model['1']['recall'],
+                    'f1_score': report_model['1']['f1-score']
+                }
+            except Exception as e:
+                performance_data[model_name] = {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}
+        model_performance_data = performance_data
     else:
         metrics_fig = {}
+        model_performance_data = {model_name: {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0} for model_name in models.keys()}
 
-    return detailed_metrics, table, fig, alert_content, alert_history, metrics_fig, feedback, df_original['Sender_account'].dropna().unique(), False, False, False, False, False
+    return detailed_metrics, table, fig, alert_content, alert_history, metrics_fig, feedback, df_original['Sender_account'].dropna().unique(), False, False, False, False, False, model_performance_data
+
+@callback(
+    Output('model-performance-table', 'data'),
+    [Input('model-performance-data', 'data')],
+    prevent_initial_call=True
+)
+def update_model_performance_table(performance_data):
+    if not performance_data:
+        return []
+    return [
+        {"model": model_name, "precision": round(data['precision'], 2), "recall": round(data['recall'], 2), "f1_score": round(data['f1-score'], 2)}
+        for model_name, data in performance_data.items()
+    ]
 
 @callback(
     [Output('modal', 'is_open', allow_duplicate=True),
