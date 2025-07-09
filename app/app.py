@@ -99,7 +99,7 @@ app.layout = html.Div([
                     style_cell={'textAlign': 'center'},
                     style_header={'backgroundColor': '#3498db', 'color': 'white'}
                 ),
-                html.P("Note: Metrics are based on simulated data and will update with live integration.", style={'textAlign': 'center', 'color': '#7f8c8d', 'margin': '20px'}),
+                html.P("Note: Metrics are based on current dashboard data.", style={'textAlign': 'center', 'color': '#7f8c8d', 'margin': '20px'}),
                 dcc.Store(id='model-performance-data', storage_type='memory', data={})
             ])
         ])
@@ -137,7 +137,7 @@ app.layout = html.Div([
 def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_filter, filename, alert_history, model_performance_data):
     print(f"Processing file: {filename} at {datetime.datetime.now()}")
     if contents is None or not models or not submit_n_clicks:
-        return ["Please upload a file, select a model, and click Submit to load data.", html.P("Interpretation: Upload data and submit to see Precision (accuracy of positive predictions), Recall (capture of actual positives), F1 Score (balance of both), and Risk Score (percentage of flagged transactions). Modeling page scores are based on simulated data and may differ due to real-time data variations.")], None, {}, None, alert_history, {}, html.P("No file uploaded yet or submit not clicked.", style={'color': 'gray'}), [], False, False, False, False, False, model_performance_data
+        return ["Please upload a file, select a model, and click Submit to load data.", html.P("Interpretation: Upload data and submit to see Precision, Recall, F1 Score, and Risk Score. Modeling page scores match dashboard data.")], None, {}, None, alert_history, {}, html.P("No file uploaded yet or submit not clicked.", style={'color': 'gray'}), [], False, False, False, False, False, model_performance_data
 
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
@@ -254,7 +254,7 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
                 html.P(f"F1 Score: {report['1']['f1-score']:.2f} (Balance of Precision and Recall)"),
                 html.P(f"Risk Score: {risk_score:.1f}% (Percentage of transactions flagged as laundering)"),
                 alert,
-                html.P("Note: Scores may differ from the Modeling page due to real-time data vs. simulated data used there.")
+                html.P("Note: Scores match dashboard data.")
             ])
         else:
             metrics = html.Div([
@@ -264,7 +264,7 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
                 html.P(f"F1 Score: {report['1']['f1-score']:.2f} (Balance of Precision and Recall)"),
                 html.P(f"Risk Score: {risk_score:.1f}% (Percentage of transactions flagged as laundering)"),
                 alert,
-                html.P("Note: Scores may differ from the Modeling page due to real-time data vs. simulated data used there.")
+                html.P("Note: Scores match dashboard data.")
             ])
     else:
         metrics = html.Div([
@@ -350,12 +350,15 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
                     'recall': report_model['1']['recall'],
                     'f1_score': report_model['1']['f1-score']
                 }
+                print(f"Model: {model_name}, Precision: {report_model['1']['precision']:.2f}, Recall: {report_model['1']['recall']:.2f}, F1: {report_model['1']['f1-score']:.2f}")
             except Exception as e:
+                print(f"Error calculating metrics for {model_name}: {e}")
                 performance_data[model_name] = {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}
         model_performance_data = performance_data
     else:
         metrics_fig = {}
         model_performance_data = {model_name: {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0} for model_name in models.keys()}
+        print("No ground truth available; using default metrics (0.0).")
 
     return detailed_metrics, table, fig, alert_content, alert_history, metrics_fig, feedback, df_original['Sender_account'].dropna().unique(), False, False, False, False, False, model_performance_data
 
@@ -368,7 +371,7 @@ def update_model_performance_table(performance_data):
     if not performance_data:
         return []
     return [
-        {"model": model_name, "precision": round(data['precision'], 2), "recall": round(data['recall'], 2), "f1_score": round(data['f1-score'], 2)}
+        {"model": model_name, "precision": round(data['precision'], 2), "recall": round(data['recall'], 2), "f1_score": round(data['f1_score'], 2)}
         for model_name, data in performance_data.items()
     ]
 
