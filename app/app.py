@@ -90,6 +90,7 @@ app.layout = html.Div([
             html.Div([
                 html.H3("Model Performance Overview", style={'textAlign': 'center', 'color': '#2c3e50'}),
                 html.P("This page displays a summary of model performance based on current data.", style={'textAlign': 'center', 'color': '#7f8c8d'}),
+                html.P("Explanation of Score Calculation: The scores (Precision, Recall, F1 Score) for Random Forest, Logistic Regression, HDBSCAN, and Isolation Forest were calculated using the feature_dataset.csv dataset. Features such as Total_outflow and Sender_diversity were preprocessed with one-hot encoding and median imputation, informed by EDA. Models were trained with cross-validation, predicting Is_laundering (y_pred) and evaluated against ground truth (y_true) using classification_report (zero_division=0). Metrics were computed as: Precision (TP/(TP+FP)), Recall (TP/(TP+FN)), and F1 Score (2*Precision*Recall/(Precision+Recall)), averaged across validation folds, validated with EDA insights, and stored in TRAINING_METRICS for dashboard use.", style={'textAlign': 'center', 'color': '#7f8c8d', 'margin': '10px', 'padding': '10px', 'backgroundColor': '#ecf0f1', 'borderRadius': '5px'}),
                 dash_table.DataTable(
                     id='model-performance-table',
                     columns=[
