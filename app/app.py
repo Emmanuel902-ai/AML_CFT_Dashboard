@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 from sklearn.metrics import classification_report
 import plotly.express as px
+import plotly.graph_objects as go
 import joblib
 
 # Initialize app and set server as WSGI application
@@ -30,10 +31,10 @@ numerical_cols = ['Amount', 'Recipient_diversity', 'Sender_diversity', 'Daily_fr
                   'Txn_sequence', 'Rolling_avg_amt', 'Weekday', 'Day', 'Month']
 categorical_cols = ['Payment_type', 'Received_currency', 'Receiver_bank_location']
 
-# Training metrics based on your evaluation (replace Logistic Regression with actual values when available)
+# Training metrics based on your evaluation
 TRAINING_METRICS = {
     "Random Forest": {"precision": 1.00, "recall": 0.91, "f1_score": 0.95},
-    "Logistic Regression": {"precision": 0.80, "recall": 0.82, "f1_score": 0.81},  # Placeholder, update with actual values
+    "Logistic Regression": {"precision": 0.73, "recall": 0.67, "f1_score": 0.70},  # Updated with real values
     "HDBSCAN": {"precision": 0.45, "recall": 0.16, "f1_score": 0.24},
     "Isolation Forest": {"precision": 0.71, "recall": 0.39, "f1_score": 0.51}
 }
@@ -288,6 +289,15 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
                 print(f"Error calculating metrics for {model_name}: {e}")
                 performance_data[model_name] = {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}
         model_performance_data = performance_data
+        metrics_fig = {
+            'data': [{
+                'x': ['Precision', 'Recall', 'F1 Score'],
+                'y': [report['1']['precision'], report['1']['recall'], report['1']['f1-score']],
+                'type': 'bar',
+                'marker': {'color': '#3498db'}
+            }],
+            'layout': {'title': f'{model_name} Performance Metrics'}
+        }
     else:
         metrics = html.Div([
             html.H4("Prediction Summary"),
@@ -298,6 +308,15 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
         ])
         model_performance_data = TRAINING_METRICS  # Use pre-trained metrics as fallback
         print("No ground truth available; using pre-trained metrics.")
+        metrics_fig = {
+            'data': [{
+                'x': ['Precision', 'Recall', 'F1 Score'],
+                'y': [TRAINING_METRICS[model_name]['precision'], TRAINING_METRICS[model_name]['recall'], TRAINING_METRICS[model_name]['f1_score']],
+                'type': 'bar',
+                'marker': {'color': '#3498db'}
+            }],
+            'layout': {'title': f'{model_name} Training Metrics'}
+        }
 
     key_fields = ['Transaction_ID', 'Sender_account', 'Receiver_account', 'Date', 'Time', 'Amount']
     available_key_fields = [col for col in key_fields if col in df_original.columns]
@@ -338,20 +357,7 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
         alert_history = [html.P(f"Alert at {datetime.datetime.now()}: Risk Score {risk_score:.1f}%", style={'color': 'red'})]
         if alert_history:
             alert_history = alert_history + (alert_history if not isinstance(alert_history, list) else [])
-        return detailed_metrics, table, fig, alert_content, alert_history, {}, feedback, df_original['Sender_account'].dropna().unique(), False, False, False, False, False, model_performance_data, "Note: Upload data with 'Is_laundering' column to view model performance metrics."
-
-    metrics_fig = {}
-    if y_true is not None:
-        report = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
-        metrics_fig = {
-            'data': [{
-                'x': ['Precision', 'Recall', 'F1 Score'],
-                'y': [report['1']['precision'], report['1']['recall'], report['1']['f1-score']],
-                'type': 'bar',
-                'marker': {'color': '#3498db'}
-            }],
-            'layout': {'title': 'Model Performance Metrics'}
-        }
+        return detailed_metrics, table, fig, alert_content, alert_history, metrics_fig, feedback, df_original['Sender_account'].dropna().unique(), False, False, False, False, False, model_performance_data, "Note: Upload data with 'Is_laundering' column to view model performance metrics."
 
     modeling_note = "Note: No 'Is_laundering' column detected in the uploaded data. Displaying pre-trained performance metrics. Upload data with ground truth for updated metrics." if y_true is None else "Note: Model performance metrics are based on the uploaded data with ground truth."
 
