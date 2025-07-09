@@ -117,7 +117,8 @@ app.layout = html.Div([
      Output('filter-sender', 'disabled'),
      Output('filter-prediction', 'disabled'),
      Output('download-button', 'disabled'),
-     Output('model-performance-data', 'data')],
+     Output('model-performance-data', 'data', allow_duplicate=True),
+     Output('modeling-note', 'children', allow_duplicate=True)],
     [Input('submit-button', 'n_clicks'),
      Input('upload_data', 'contents'),
      Input('model_selector', 'value'),
@@ -128,10 +129,10 @@ app.layout = html.Div([
      State('model-performance-data', 'data')],
     prevent_initial_call=True
 )
-def update_dashboard(submit_n_clicks, contents, model_name, sender_filter, pred_filter, filename, alert_history, model_performance_data):
+def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_filter, filename, alert_history, model_performance_data):
     print(f"Processing file: {filename} at {datetime.datetime.now()}")
     if contents is None or not models or not submit_n_clicks:
-        return ["Please upload a file, select a model, and click Submit to load data.", html.P("Interpretation: Upload data and submit to see predicted laundering status. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, html.P("No file uploaded yet or submit not clicked.", style={'color': 'gray'}), [], False, False, False, False, False, {'Random Forest': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'Logistic Regression': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'HDBSCAN': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'Isolation Forest': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}}
+        return ["Please upload a file, select a model, and click Submit to load data.", html.P("Interpretation: Upload data and submit to see predicted laundering status. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, html.P("No file uploaded yet or submit not clicked.", style={'color': 'gray'}), [], False, False, False, False, False, model_performance_data, "Note: Upload data with 'Is_laundering' column to view model performance metrics."
 
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
@@ -140,7 +141,7 @@ def update_dashboard(submit_n_clicks, contents, model_name, sender_filter, pred_
         df = pd.read_csv(io.StringIO(decoded.decode('utf-8-sig')))
         feedback = html.P("Data uploaded successfully!", style={'color': 'green'})
     except Exception as e:
-        return [f"❌ Failed to parse CSV: {e}", html.P("Interpretation: Ensure the uploaded file is a valid CSV with required columns. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, html.P(f"Upload failed: {e}", style={'color': 'red'}), [], False, False, False, False, False, {'Random Forest': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'Logistic Regression': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'HDBSCAN': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'Isolation Forest': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}}
+        return [f"❌ Failed to parse CSV: {e}", html.P("Interpretation: Ensure the uploaded file is a valid CSV with required columns. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, html.P(f"Upload failed: {e}", style={'color': 'red'}), [], False, False, False, False, False, model_performance_data, "Note: Upload data with 'Is_laundering' column to view model performance metrics."
 
     df_original = df.copy()
 
@@ -190,10 +191,10 @@ def update_dashboard(submit_n_clicks, contents, model_name, sender_filter, pred_
             df[numerical_cols] = df[numerical_cols].fillna(df[numerical_cols].median(numeric_only=True))
             X = df.reindex(columns=TOP_FEATURES, fill_value=0)
         except Exception as e:
-            return [f"❌ Preprocessing failed: {e}", html.P("Interpretation: Check data integrity or column names. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, {'Random Forest': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'Logistic Regression': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'HDBSCAN': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'Isolation Forest': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}}
+            return [f"❌ Preprocessing failed: {e}", html.P("Interpretation: Check data integrity or column names. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, model_performance_data, "Note: Upload data with 'Is_laundering' column to view model performance metrics."
 
     if X.shape[1] != len(TOP_FEATURES):
-        return [f"❌ Feature mismatch: Expected {len(TOP_FEATURES)} features, got {X.shape[1]}", html.P("Interpretation: Ensure all required features are present in the uploaded data. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, {'Random Forest': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'Logistic Regression': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'HDBSCAN': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'Isolation Forest': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}}
+        return [f"❌ Feature mismatch: Expected {len(TOP_FEATURES)} features, got {X.shape[1]}", html.P("Interpretation: Ensure all required features are present in the uploaded data. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, model_performance_data, "Note: Upload data with 'Is_laundering' column to view model performance metrics."
 
     print(f"X shape: {X.shape}")
     print(f"X columns: {X.columns.tolist()}")
@@ -203,7 +204,7 @@ def update_dashboard(submit_n_clicks, contents, model_name, sender_filter, pred_
 
     model = models.get(model_name)
     if model is None:
-        return [f"❌ Model {model_name} not loaded.", html.P("Interpretation: Model loading failed; verify model files. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, {'Random Forest': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'Logistic Regression': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'HDBSCAN': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'Isolation Forest': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}}
+        return [f"❌ Model {model_name} not loaded.", html.P("Interpretation: Model loading failed; verify model files. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, model_performance_data, "Note: Upload data with 'Is_laundering' column to view model performance metrics."
 
     try:
         if model_name == "HDBSCAN":
@@ -220,7 +221,7 @@ def update_dashboard(submit_n_clicks, contents, model_name, sender_filter, pred_
                 except:
                     pass
     except Exception as e:
-        return [f"❌ Model prediction failed: {e}", html.P("Interpretation: Prediction error; check model compatibility with data. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, {'Random Forest': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'Logistic Regression': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'HDBSCAN': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'Isolation Forest': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}}
+        return [f"❌ Model prediction failed: {e}", html.P("Interpretation: Prediction error; check model compatibility with data. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, model_performance_data, "Note: Upload data with 'Is_laundering' column to view model performance metrics."
 
     print(f"y_pred distribution: {pd.Series(y_pred).value_counts()}")
     print(f"Unique predictions: {np.unique(y_pred)}")
@@ -279,29 +280,27 @@ def update_dashboard(submit_n_clicks, contents, model_name, sender_filter, pred_
         alert_history = [html.P(f"Alert at {datetime.datetime.now()}: Risk Score {risk_score:.1f}%", style={'color': 'red'})]
         if alert_history:
             alert_history = alert_history + (alert_history if not isinstance(alert_history, list) else [])
-        return detailed_metrics, table, fig, alert_content, alert_history, {}, feedback, df_original['Sender_account'].dropna().unique(), False, False, False, False, False, {'Random Forest': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'Logistic Regression': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'HDBSCAN': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'Isolation Forest': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}}
+        return detailed_metrics, table, fig, alert_content, alert_history, {}, feedback, df_original['Sender_account'].dropna().unique(), False, False, False, False, False, model_performance_data, "Note: Upload data with 'Is_laundering' column to view model performance metrics."
 
-    return detailed_metrics, table, fig, alert_content, alert_history, {}, feedback, df_original['Sender_account'].dropna().unique(), False, False, False, False, False, {'Random Forest': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'Logistic Regression': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'HDBSCAN': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}, 'Isolation Forest': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}}
+    metrics_fig = {}
+    modeling_note = "Note: No 'Is_laundering' column detected in the uploaded data. Model performance metrics (Precision, Recall, F1 Score) are not available. Upload data with ground truth to enable performance analysis."
+    model_performance_data = {model_name: {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0} for model_name in models.keys()}
+    print("No ground truth available; using default metrics (0.0).")
+
+    return detailed_metrics, table, fig, alert_content, alert_history, metrics_fig, feedback, df_original['Sender_account'].dropna().unique(), False, False, False, False, False, model_performance_data, modeling_note
 
 @callback(
-    [Output('model-performance-table', 'data'),
-     Output('modeling-note', 'children')],
-    [Input('model-performance-data', 'data'),
-     Input('tab-dashboard', 'active_tab')],
+    Output('model-performance-table', 'data'),
+    [Input('model-performance-data', 'data')],
     prevent_initial_call=True
 )
-def update_modeling_tab(performance_data, active_tab):
+def update_model_performance_table(performance_data):
     if not performance_data:
-        return [], "Note: Upload data with 'Is_laundering' column to view model performance metrics."
-    if 'Is_laundering' not in performance_data.get('context', {}):
-        return [
-            {"model": model_name, "precision": 0.0, "recall": 0.0, "f1_score": 0.0}
-            for model_name in models.keys()
-        ], "Note: No 'Is_laundering' column detected in the uploaded data. Model performance metrics (Precision, Recall, F1 Score) are not available. Upload data with ground truth to enable performance analysis."
+        return []
     return [
         {"model": model_name, "precision": round(data['precision'], 2), "recall": round(data['recall'], 2), "f1_score": round(data['f1_score'], 2)}
         for model_name, data in performance_data.items()
-    ], "Note: Metrics are based on current dashboard data."
+    ]
 
 @callback(
     [Output('modal', 'is_open', allow_duplicate=True),
