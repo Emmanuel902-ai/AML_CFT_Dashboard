@@ -137,7 +137,7 @@ app.layout = html.Div([
 def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_filter, filename, alert_history, model_performance_data):
     print(f"Processing file: {filename} at {datetime.datetime.now()}")
     if contents is None or not models or not submit_n_clicks:
-        return ["Please upload a file, select a model, and click Submit to load data.", html.P("Interpretation: Upload data and submit to see Precision, Recall, F1 Score, and Risk Score. Modeling page scores match dashboard data.")], None, {}, None, alert_history, {}, html.P("No file uploaded yet or submit not clicked.", style={'color': 'gray'}), [], False, False, False, False, False, model_performance_data
+        return ["Please upload a file, select a model, and click Submit to load data.", html.P("Interpretation: Upload data and submit to see detailed performance metrics and risk assessment. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, html.P("No file uploaded yet or submit not clicked.", style={'color': 'gray'}), [], False, False, False, False, False, model_performance_data
 
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
@@ -146,7 +146,7 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
         df = pd.read_csv(io.StringIO(decoded.decode('utf-8-sig')))
         feedback = html.P("Data uploaded successfully!", style={'color': 'green'})
     except Exception as e:
-        return [f"❌ Failed to parse CSV: {e}", html.P("Interpretation: Ensure the uploaded file is a valid CSV with required columns.")], None, {}, None, alert_history, {}, html.P(f"Upload failed: {e}", style={'color': 'red'}), [], False, False, False, False, False, model_performance_data
+        return [f"❌ Failed to parse CSV: {e}", html.P("Interpretation: Ensure the uploaded file is a valid CSV with required columns. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, html.P(f"Upload failed: {e}", style={'color': 'red'}), [], False, False, False, False, False, model_performance_data
 
     df_original = df.copy()
 
@@ -202,10 +202,10 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
             y_true = df['Is_laundering'] if 'Is_laundering' in df.columns else None
             X = df.reindex(columns=TOP_FEATURES, fill_value=0)
         except Exception as e:
-            return [f"❌ Preprocessing failed: {e}", html.P("Interpretation: Check data integrity or column names.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, model_performance_data
+            return [f"❌ Preprocessing failed: {e}", html.P("Interpretation: Check data integrity or column names. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, model_performance_data
 
     if X.shape[1] != len(TOP_FEATURES):
-        return [f"❌ Feature mismatch: Expected {len(TOP_FEATURES)} features, got {X.shape[1]}", html.P("Interpretation: Ensure all required features are present in the uploaded data.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, model_performance_data
+        return [f"❌ Feature mismatch: Expected {len(TOP_FEATURES)} features, got {X.shape[1]}", html.P("Interpretation: Ensure all required features are present in the uploaded data. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, model_performance_data
 
     print(f"X shape: {X.shape}")
     print(f"X columns: {X.columns.tolist()}")
@@ -215,7 +215,7 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
 
     model = models.get(model_name)
     if model is None:
-        return [f"❌ Model {model_name} not loaded.", html.P("Interpretation: Model loading failed; verify model files.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, model_performance_data
+        return [f"❌ Model {model_name} not loaded.", html.P("Interpretation: Model loading failed; verify model files. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, model_performance_data
 
     try:
         if model_name == "HDBSCAN":
@@ -232,7 +232,7 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
                 except:
                     pass  # Skip if predict_proba fails
     except Exception as e:
-        return [f"❌ Model prediction failed: {e}", html.P("Interpretation: Prediction error; check model compatibility with data.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, model_performance_data
+        return [f"❌ Model prediction failed: {e}", html.P("Interpretation: Prediction error; check model compatibility with data. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, model_performance_data
 
     print(f"y_pred distribution: {pd.Series(y_pred).value_counts()}")
     print(f"Unique predictions: {np.unique(y_pred)}")
@@ -247,32 +247,30 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
         report = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
         if sum(y_true) / len(y_true) < 0.1:
             metrics = html.Div([
-                html.P("⚠️ Warning: Model may be overfitting due to imbalanced data.", style={'color': 'orange'}),
+                html.P("⚠️ Warning: Model may be overfitting due to imbalanced data (less than 10% laundering cases).", style={'color': 'orange'}),
                 html.H4("Model Performance Metrics"),
-                html.P(f"Precision: {report['1']['precision']:.2f} (Accuracy of laundering predictions)"),
-                html.P(f"Recall: {report['1']['recall']:.2f} (Proportion of actual laundering caught)"),
-                html.P(f"F1 Score: {report['1']['f1-score']:.2f} (Balance of Precision and Recall)"),
-                html.P(f"Risk Score: {risk_score:.1f}% (Percentage of transactions flagged as laundering)"),
+                html.P(f"Precision: {report['1']['precision']:.2f} - This measures how accurate the model is when predicting laundering (1), i.e., the proportion of true laundering cases among predicted laundering cases."),
+                html.P(f"Recall: {report['1']['recall']:.2f} - This indicates how well the model identifies actual laundering cases (1), i.e., the proportion of true laundering cases captured by the model."),
+                html.P(f"F1 Score: {report['1']['f1-score']:.2f} - This is the harmonic mean of Precision and Recall, providing a balanced measure of the model's performance on laundering detection."),
+                html.P(f"Risk Score: {risk_score:.1f}% - This represents the percentage of transactions flagged as potential laundering (1), with higher values indicating greater risk."),
                 alert,
-                html.P("Note: Scores match dashboard data.")
             ])
         else:
             metrics = html.Div([
                 html.H4("Model Performance Metrics"),
-                html.P(f"Precision: {report['1']['precision']:.2f} (Accuracy of laundering predictions)"),
-                html.P(f"Recall: {report['1']['recall']:.2f} (Proportion of actual laundering caught)"),
-                html.P(f"F1 Score: {report['1']['f1-score']:.2f} (Balance of Precision and Recall)"),
-                html.P(f"Risk Score: {risk_score:.1f}% (Percentage of transactions flagged as laundering)"),
+                html.P(f"Precision: {report['1']['precision']:.2f} - This measures how accurate the model is when predicting laundering (1), i.e., the proportion of true laundering cases among predicted laundering cases."),
+                html.P(f"Recall: {report['1']['recall']:.2f} - This indicates how well the model identifies actual laundering cases (1), i.e., the proportion of true laundering cases captured by the model."),
+                html.P(f"F1 Score: {report['1']['f1-score']:.2f} - This is the harmonic mean of Precision and Recall, providing a balanced measure of the model's performance on laundering detection."),
+                html.P(f"Risk Score: {risk_score:.1f}% - This represents the percentage of transactions flagged as potential laundering (1), with higher values indicating greater risk."),
                 alert,
-                html.P("Note: Scores match dashboard data.")
             ])
     else:
         metrics = html.Div([
             html.H4("Prediction Summary"),
-            html.P(f"{sum(y_pred)} transactions predicted as laundering."),
-            html.P(f"Risk Score: {risk_score:.1f}% (Percentage of transactions flagged as laundering)"),
+            html.P(f"{sum(y_pred)} transactions predicted as laundering (1)."),
+            html.P(f"Risk Score: {risk_score:.1f}% - This is the percentage of transactions flagged as potential laundering (1), based solely on model predictions since no ground truth is available."),
             alert,
-            html.P("Interpretation: No ground truth available; Risk Score reflects model predictions only.")
+            html.P("Interpretation: Without actual laundering data (Is_laundering), the model assigns 1 to suspected laundering and 0 to normal transactions. Review predictions with caution.")
         ])
 
     # Enhanced DataTable to include only available key transaction fields
@@ -309,8 +307,8 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
     flagged_transactions = sum(y_pred)
     detailed_metrics = html.Div([
         metrics,
-        html.P(f"Total Transactions: {total_transactions}", style={'margin-top': '10px'}),
-        html.P(f"Flagged Transactions: {flagged_transactions} ({risk_score:.1f}%)")
+        html.P(f"Total Transactions: {total_transactions} - The total number of transactions analyzed.", style={'margin-top': '10px'}),
+        html.P(f"Flagged Transactions: {flagged_transactions} ({risk_score:.1f}%) - The number and percentage of transactions predicted as laundering (1).")
     ])
 
     # Alert History
