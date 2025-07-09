@@ -297,7 +297,7 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
         id='transaction-table'
     )
 
-    fig = px.pie(df_original, names='Prediction', title=f'Prediction Distribution (Risk Score: {risk_score:.1f}%)')
+    fig = px.pie(df_original, names='Prediction', title=f'Prediction Distribution (Risk Score: {risk_score:.1f}%) - 1 indicates laundering, 0 indicates no laundering')
 
     # Alert System: Dynamic in-app alert for high-risk cases
     alert_content = dbc.Alert("High Risk Transaction Detected! Action Required.", color="danger", duration=4000, is_open=True) if risk_score > 50 else None
