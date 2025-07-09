@@ -12,15 +12,11 @@ from sklearn.metrics import classification_report
 import plotly.express as px
 import joblib
 
-# TODO: Add basic authentication (e.g., Dash login) for user access to show future security intent without code changes.
-# TODO: Enhance interval to simulate real-time data updates to highlight potential for live monitoring.
-# TODO: Add user-configurable alert threshold (e.g., slider) to suggest dynamic alerts without modifying the current 50% trigger.
-
 # Initialize app and set server as WSGI application
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
-server = app.server  # Explicitly define server as the Flask WSGI instance
+server = app.server
 
-# Define constants (updated with correct path)
+# Define constants
 MODEL_PATH = "models"
 TOP_FEATURES = joblib.load("data/processed/top_features.pkl")
 models = {
@@ -34,7 +30,7 @@ numerical_cols = ['Amount', 'Recipient_diversity', 'Sender_diversity', 'Daily_fr
                   'Txn_sequence', 'Rolling_avg_amt', 'Weekday', 'Day', 'Month']
 categorical_cols = ['Payment_type', 'Received_currency', 'Receiver_bank_location']
 
-# Layout with enhanced design and modeling page
+# Layout remains unchanged
 app.layout = html.Div([
     # Header with logo and title
     html.Div([
@@ -42,7 +38,6 @@ app.layout = html.Div([
         html.H1("Bank AML/CFT Dashboard", style={'textAlign': 'center', 'margin-left': '60px', 'color': '#2c3e50'})
     ], style={'backgroundColor': '#f8f9fa', 'padding': '15px', 'borderBottom': '2px solid #3498db'}),
     
-    # Tab system for enhanced design and modeling page
     dbc.Tabs([
         dbc.Tab(label='Dashboard', tab_id='tab-dashboard', children=[
             dcc.Upload(
@@ -64,7 +59,7 @@ app.layout = html.Div([
             dcc.Download(id="download-data"),
             dcc.Loading(
                 id="loading",
-                type="circle",  # Spinner type
+                type="circle",
                 children=[
                     html.Div(id='output_metrics', style={'margin': '10px', 'backgroundColor': '#ecf0f1', 'padding': '10px', 'borderRadius': '5px'}),
                     html.Div(id='prediction_table', style={'margin': '10px', 'backgroundColor': '#ecf0f1', 'padding': '10px', 'borderRadius': '5px'}),
@@ -105,7 +100,6 @@ app.layout = html.Div([
         ])
     ], active_tab='tab-dashboard', style={'margin': '20px'}),
     
-    # Footer branding
     html.Div("© Bank 2025 - Contact: emmynahimana1999@gmail.com", style={'textAlign': 'center', 'padding': '10px', 'backgroundColor': '#f8f9fa', 'borderTop': '2px solid #3498db', 'color': '#7f8c8d'})
 ], style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '1200px', 'margin': 'auto', 'boxShadow': '0 4px 8px rgba(0,0,0,0.1)'})
 
@@ -137,7 +131,7 @@ app.layout = html.Div([
 def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_filter, filename, alert_history, model_performance_data):
     print(f"Processing file: {filename} at {datetime.datetime.now()}")
     if contents is None or not models or not submit_n_clicks:
-        return ["Please upload a file, select a model, and click Submit to load data.", html.P("Interpretation: Upload data and submit to see detailed performance metrics and risk assessment. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, html.P("No file uploaded yet or submit not clicked.", style={'color': 'gray'}), [], False, False, False, False, False, model_performance_data
+        return ["Please upload a file, select a model, and click Submit to load data.", html.P("Interpretation: Upload data and submit to see predicted laundering status. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, html.P("No file uploaded yet or submit not clicked.", style={'color': 'gray'}), [], False, False, False, False, False, model_performance_data
 
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
@@ -152,15 +146,13 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
 
     if set(TOP_FEATURES).issubset(df.columns):
         X = df[TOP_FEATURES].copy()
-        y_true = df['Is_laundering'] if 'Is_laundering' in df.columns else None
     else:
         try:
             if X.shape[0] > 10000:
                 X = X.sample(n=10000, random_state=43)
                 print("Dataset reduced to 10,000 rows for performance.")
-            # Validate and clean Date
             df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-            df = df.dropna(subset=['Date'])  # Remove rows with invalid dates
+            df = df.dropna(subset=['Date'])
             df['Time'] = pd.to_datetime(df['Time'], format='%H:%M:%S', errors='coerce')
             df = df.sort_values(by=['Sender_account', 'Date', 'Time'])
             df['Total_inflow'] = df.groupby('Receiver_account')['Amount'].cumsum()
@@ -185,21 +177,17 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
             df['Day'] = df['Date'].dt.day
             df['Month'] = df['Date'].dt.month
             df = df.drop(columns=['Time', 'Laundering_type'] if 'Laundering_type' in df.columns else ['Time'])
-            # Ensure non-negative values with handling for non-numeric Sender_account
             df['Sender_account'] = pd.to_numeric(df['Sender_account'], errors='coerce').fillna(0).abs().astype('int32')
             df['Receiver_account'] = pd.to_numeric(df['Receiver_account'], errors='coerce').fillna(0).abs().astype('int32')
             df['Weekday'] = df['Weekday'].apply(lambda x: x if pd.notna(x) and 0 <= x <= 6 else 0)
             df['Day'] = df['Day'].apply(lambda x: x if pd.notna(x) and 1 <= x <= 31 else 1)
             df['Month'] = df['Month'].apply(lambda x: x if pd.notna(x) and 1 <= x <= 12 else 1)
             df['Amount'] = df['Amount'].astype('float32')
-            if 'Is_laundering' in df.columns:
-                df['Is_laundering'] = df['Is_laundering'].astype('int8')
             for col in ['Recipient_diversity', 'Sender_diversity', 'Daily_frequency', 'Avg_velocity',
                         'Total_inflow', 'Total_outflow', 'Inflow_Outflow_Ratio', 'Txn_sequence', 'Rolling_avg_amt']:
                 df[col] = df[col].astype('float32')
             df = pd.get_dummies(df, columns=categorical_cols, drop_first=True)
             df[numerical_cols] = df[numerical_cols].fillna(df[numerical_cols].median(numeric_only=True))
-            y_true = df['Is_laundering'] if 'Is_laundering' in df.columns else None
             X = df.reindex(columns=TOP_FEATURES, fill_value=0)
         except Exception as e:
             return [f"❌ Preprocessing failed: {e}", html.P("Interpretation: Check data integrity or column names. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, model_performance_data
@@ -227,10 +215,10 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
                 y_pred = np.where(y_pred == -1, 1, 0)
             if model_name in ["Random Forest", "Logistic Regression"]:
                 try:
-                    prob = model.predict_proba(X)[:, 1]  # Probability of class 1 (laundering)
+                    prob = model.predict_proba(X)[:, 1]
                     df_original['Confidence'] = prob
                 except:
-                    pass  # Skip if predict_proba fails
+                    pass
     except Exception as e:
         return [f"❌ Model prediction failed: {e}", html.P("Interpretation: Prediction error; check model compatibility with data. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, model_performance_data
 
@@ -243,9 +231,19 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
 
     alert = html.Div([html.H5("⚠️ High Risk Alert")], style={'color': 'red'}) if risk_score > 50 else ""
 
-    if y_true is not None:
-        report = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
+    # Handle case where Is_laundering is not present
+    if 'Is_laundering' not in df_original.columns:
+        metrics = html.Div([
+            html.H4("Prediction Summary"),
+            html.P(f"{sum(y_pred)} transactions predicted as laundering (1)."),
+            html.P(f"Risk Score: {risk_score:.1f}% - This is the percentage of transactions flagged as potential laundering (1), based solely on model predictions since no ground truth is available."),
+            alert,
+            html.P("Interpretation: Without actual laundering data (Is_laundering), the model assigns 1 to suspected laundering and 0 to normal transactions. Review predictions with caution.")
+        ])
+    else:
+        y_true = df_original['Is_laundering']
         if sum(y_true) / len(y_true) < 0.1:
+            report = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
             metrics = html.Div([
                 html.P("⚠️ Warning: Model may be overfitting due to imbalanced data (less than 10% laundering cases).", style={'color': 'orange'}),
                 html.H4("Model Performance Metrics"),
@@ -256,6 +254,7 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
                 alert,
             ])
         else:
+            report = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
             metrics = html.Div([
                 html.H4("Model Performance Metrics"),
                 html.P(f"Precision: {report['1']['precision']:.2f} - This measures how accurate the model is when predicting laundering (1), i.e., the proportion of true laundering cases among predicted laundering cases."),
@@ -264,21 +263,12 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
                 html.P(f"Risk Score: {risk_score:.1f}% - This represents the percentage of transactions flagged as potential laundering (1), with higher values indicating greater risk."),
                 alert,
             ])
-    else:
-        metrics = html.Div([
-            html.H4("Prediction Summary"),
-            html.P(f"{sum(y_pred)} transactions predicted as laundering (1)."),
-            html.P(f"Risk Score: {risk_score:.1f}% - This is the percentage of transactions flagged as potential laundering (1), based solely on model predictions since no ground truth is available."),
-            alert,
-            html.P("Interpretation: Without actual laundering data (Is_laundering), the model assigns 1 to suspected laundering and 0 to normal transactions. Review predictions with caution.")
-        ])
 
-    # Enhanced DataTable to include only available key transaction fields
     key_fields = ['Transaction_ID', 'Sender_account', 'Receiver_account', 'Date', 'Time', 'Amount']
     available_key_fields = [col for col in key_fields if col in df_original.columns]
     columns_to_use = available_key_fields + [col for col in df_original.columns if col in TOP_FEATURES or col in ['Risk_Score', 'Is_laundering', 'Prediction', 'Confidence']]
-    columns_to_use = [col for col in columns_to_use if col not in ['Weekday', 'Day', 'Month']]  # Exclude Weekday, Day, and Month
-    columns_to_use = list(dict.fromkeys(columns_to_use))  # Deduplicate while preserving order
+    columns_to_use = [col for col in columns_to_use if col not in ['Weekday', 'Day', 'Month']]
+    columns_to_use = list(dict.fromkeys(columns_to_use))
     table_columns = [{"name": i, "id": i} for i in columns_to_use]
     filtered_data = df_original[columns_to_use].head(50)
     if sender_filter:
@@ -299,10 +289,8 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
 
     fig = px.pie(df_original, names='Prediction', title=f'Prediction Distribution (Risk Score: {risk_score:.1f}%) - 1 indicates laundering, 0 indicates no laundering')
 
-    # Alert System: Dynamic in-app alert for high-risk cases
     alert_content = dbc.Alert("High Risk Transaction Detected! Action Required.", color="danger", duration=4000, is_open=True) if risk_score > 50 else None
 
-    # Detailed Reporting: Enhanced metrics with total flagged transactions
     total_transactions = len(df_original)
     flagged_transactions = sum(y_pred)
     detailed_metrics = html.Div([
@@ -311,15 +299,14 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
         html.P(f"Flagged Transactions: {flagged_transactions} ({risk_score:.1f}%) - The number and percentage of transactions predicted as laundering (1).")
     ])
 
-    # Alert History
     if risk_score > 50:
         alert_history = [html.P(f"Alert at {datetime.datetime.now()}: Risk Score {risk_score:.1f}%", style={'color': 'red'})]
         if alert_history:
             alert_history = alert_history + (alert_history if not isinstance(alert_history, list) else [])
         return detailed_metrics, table, fig, alert_content, alert_history, metrics_fig, feedback, df_original['Sender_account'].dropna().unique(), False, False, False, False, False, model_performance_data
 
-    # Metrics Chart
-    if y_true is not None:
+    if 'Is_laundering' in df_original.columns:
+        y_true = df_original['Is_laundering']
         report = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
         metrics_fig = {
             'data': [{
@@ -330,7 +317,6 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
             }],
             'layout': {'title': 'Model Performance Metrics'}
         }
-        # Update model performance data for all models
         performance_data = {}
         for model_name in models.keys():
             model = models[model_name]
@@ -413,16 +399,13 @@ def generate_report(n_clicks, model_name, contents):
     X = df[TOP_FEATURES].copy() if set(TOP_FEATURES).issubset(df.columns) else df.reindex(columns=TOP_FEATURES, fill_value=0)
     y_pred = models[model_name].predict(X)
     df_original['Prediction'] = y_pred
-    # Add summary statistics as additional rows to the CSV
     total_transactions = len(df_original)
     flagged_transactions = sum(y_pred)
     risk_score = (sum(y_pred) / len(y_pred)) * 100 if len(y_pred) > 0 else 0
     false_positives = 0
-    if 'Is_laundering' in df_original.columns:
-        false_positives = sum((y_pred == 1) & (df_original['Is_laundering'] == 0))
     summary_data = pd.DataFrame({
-        'Metric': ['Total Transactions', 'Flagged Transactions', 'Risk Score (%)', 'False Positives'],
-        'Value': [total_transactions, flagged_transactions, risk_score, false_positives]
+        'Metric': ['Total Transactions', 'Flagged Transactions', 'Risk Score (%)'],
+        'Value': [total_transactions, flagged_transactions, risk_score]
     })
     combined_df = pd.concat([df_original, summary_data], ignore_index=True)
     return dcc.send_data_frame(combined_df.to_csv, filename=f"aml_report_{model_name}_{time.strftime('%Y%m%d')}.csv")
