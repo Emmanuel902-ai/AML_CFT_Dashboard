@@ -30,12 +30,12 @@ numerical_cols = ['Amount', 'Recipient_diversity', 'Sender_diversity', 'Daily_fr
                   'Txn_sequence', 'Rolling_avg_amt', 'Weekday', 'Day', 'Month']
 categorical_cols = ['Payment_type', 'Received_currency', 'Receiver_bank_location']
 
-# Placeholder training metrics (replace with your actual values)
+# Training metrics based on your evaluation (replace Logistic Regression with actual values when available)
 TRAINING_METRICS = {
-    "Random Forest": {"precision": 0.85, "recall": 0.88, "f1_score": 0.87},
-    "Logistic Regression": {"precision": 0.80, "recall": 0.82, "f1_score": 0.81},
-    "HDBSCAN": {"precision": 0.75, "recall": 0.70, "f1_score": 0.72},
-    "Isolation Forest": {"precision": 0.78, "recall": 0.76, "f1_score": 0.77}
+    "Random Forest": {"precision": 1.00, "recall": 0.91, "f1_score": 0.95},
+    "Logistic Regression": {"precision": 0.80, "recall": 0.82, "f1_score": 0.81},  # Placeholder, update with actual values
+    "HDBSCAN": {"precision": 0.45, "recall": 0.16, "f1_score": 0.24},
+    "Isolation Forest": {"precision": 0.71, "recall": 0.39, "f1_score": 0.51}
 }
 
 # Layout
@@ -155,6 +155,7 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
 
     if set(TOP_FEATURES).issubset(df.columns):
         X = df[TOP_FEATURES].copy()
+        y_true = df['Is_laundering'] if 'Is_laundering' in df.columns else None
     else:
         try:
             if X.shape[0] > 10000:
@@ -192,11 +193,14 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
             df['Day'] = df['Day'].apply(lambda x: x if pd.notna(x) and 1 <= x <= 31 else 1)
             df['Month'] = df['Month'].apply(lambda x: x if pd.notna(x) and 1 <= x <= 12 else 1)
             df['Amount'] = df['Amount'].astype('float32')
+            if 'Is_laundering' in df.columns:
+                df['Is_laundering'] = df['Is_laundering'].astype('int8')
             for col in ['Recipient_diversity', 'Sender_diversity', 'Daily_frequency', 'Avg_velocity',
                         'Total_inflow', 'Total_outflow', 'Inflow_Outflow_Ratio', 'Txn_sequence', 'Rolling_avg_amt']:
                 df[col] = df[col].astype('float32')
             df = pd.get_dummies(df, columns=categorical_cols, drop_first=True)
             df[numerical_cols] = df[numerical_cols].fillna(df[numerical_cols].median(numeric_only=True))
+            y_true = df['Is_laundering'] if 'Is_laundering' in df.columns else None
             X = df.reindex(columns=TOP_FEATURES, fill_value=0)
         except Exception as e:
             return [f"❌ Preprocessing failed: {e}", html.P("Interpretation: Check data integrity or column names. Values of 1 indicate predicted laundering, while 0 indicates no laundering.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False, model_performance_data, "Note: Upload data with 'Is_laundering' column to view model performance metrics."
@@ -240,14 +244,60 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
 
     alert = html.Div([html.H5("⚠️ High Risk Alert")], style={'color': 'red'}) if risk_score > 50 else ""
 
-    # Only prediction metrics
-    metrics = html.Div([
-        html.H4("Prediction Summary"),
-        html.P(f"{sum(y_pred)} transactions predicted as laundering (1)."),
-        html.P(f"Risk Score: {risk_score:.1f}% - This is the percentage of transactions flagged as potential laundering (1), based solely on model predictions."),
-        alert,
-        html.P("Interpretation: The model assigns 1 to suspected laundering and 0 to normal transactions. Review predictions with caution.")
-    ])
+    if y_true is not None:
+        report = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
+        if sum(y_true) / len(y_true) < 0.1:
+            metrics = html.Div([
+                html.P("⚠️ Warning: Model may be overfitting due to imbalanced data (less than 10% laundering cases).", style={'color': 'orange'}),
+                html.H4("Model Performance Metrics"),
+                html.P(f"Precision: {report['1']['precision']:.2f} - This measures how accurate the model is when predicting laundering (1), i.e., the proportion of true laundering cases among predicted laundering cases."),
+                html.P(f"Recall: {report['1']['recall']:.2f} - This indicates how well the model identifies actual laundering cases (1), i.e., the proportion of true laundering cases captured by the model."),
+                html.P(f"F1 Score: {report['1']['f1-score']:.2f} - This is the harmonic mean of Precision and Recall, providing a balanced measure of the model's performance on laundering detection."),
+                html.P(f"Risk Score: {risk_score:.1f}% - This represents the percentage of transactions flagged as potential laundering (1), with higher values indicating greater risk."),
+                alert,
+            ])
+        else:
+            metrics = html.Div([
+                html.H4("Model Performance Metrics"),
+                html.P(f"Precision: {report['1']['precision']:.2f} - This measures how accurate the model is when predicting laundering (1), i.e., the proportion of true laundering cases among predicted laundering cases."),
+                html.P(f"Recall: {report['1']['recall']:.2f} - This indicates how well the model identifies actual laundering cases (1), i.e., the proportion of true laundering cases captured by the model."),
+                html.P(f"F1 Score: {report['1']['f1-score']:.2f} - This is the harmonic mean of Precision and Recall, providing a balanced measure of the model's performance on laundering detection."),
+                html.P(f"Risk Score: {risk_score:.1f}% - This represents the percentage of transactions flagged as potential laundering (1), with higher values indicating greater risk."),
+                alert,
+            ])
+        # Compute metrics for all models
+        performance_data = {}
+        for model_name in models.keys():
+            model = models[model_name]
+            try:
+                if model_name == "HDBSCAN":
+                    labels = model.fit_predict(X)
+                    y_pred_model = (labels == -1).astype(int)
+                else:
+                    y_pred_model = model.predict(X)
+                    if model_name == "Isolation Forest":
+                        y_pred_model = np.where(y_pred_model == -1, 1, 0)
+                report_model = classification_report(y_true, y_pred_model, output_dict=True, zero_division=0)
+                performance_data[model_name] = {
+                    'precision': report_model['1']['precision'],
+                    'recall': report_model['1']['recall'],
+                    'f1_score': report_model['1']['f1-score']
+                }
+                print(f"Model: {model_name}, Precision: {report_model['1']['precision']:.2f}, Recall: {report_model['1']['recall']:.2f}, F1: {report_model['1']['f1-score']:.2f}")
+            except Exception as e:
+                print(f"Error calculating metrics for {model_name}: {e}")
+                performance_data[model_name] = {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}
+        model_performance_data = performance_data
+    else:
+        metrics = html.Div([
+            html.H4("Prediction Summary"),
+            html.P(f"{sum(y_pred)} transactions predicted as laundering (1)."),
+            html.P(f"Risk Score: {risk_score:.1f}% - This is the percentage of transactions flagged as potential laundering (1), based solely on model predictions since no ground truth is available."),
+            alert,
+            html.P("Interpretation: Without actual laundering data (Is_laundering), the model assigns 1 to suspected laundering and 0 to normal transactions. Review predictions with caution.")
+        ])
+        model_performance_data = TRAINING_METRICS  # Use pre-trained metrics as fallback
+        print("No ground truth available; using pre-trained metrics.")
 
     key_fields = ['Transaction_ID', 'Sender_account', 'Receiver_account', 'Date', 'Time', 'Amount']
     available_key_fields = [col for col in key_fields if col in df_original.columns]
@@ -291,9 +341,19 @@ def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_fil
         return detailed_metrics, table, fig, alert_content, alert_history, {}, feedback, df_original['Sender_account'].dropna().unique(), False, False, False, False, False, model_performance_data, "Note: Upload data with 'Is_laundering' column to view model performance metrics."
 
     metrics_fig = {}
-    modeling_note = "Note: No 'Is_laundering' column detected in the uploaded data. Displaying pre-trained performance metrics. Upload data with ground truth for updated metrics."
-    model_performance_data = TRAINING_METRICS  # Use pre-trained metrics as placeholder
-    print("No ground truth available; using pre-trained metrics.")
+    if y_true is not None:
+        report = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
+        metrics_fig = {
+            'data': [{
+                'x': ['Precision', 'Recall', 'F1 Score'],
+                'y': [report['1']['precision'], report['1']['recall'], report['1']['f1-score']],
+                'type': 'bar',
+                'marker': {'color': '#3498db'}
+            }],
+            'layout': {'title': 'Model Performance Metrics'}
+        }
+
+    modeling_note = "Note: No 'Is_laundering' column detected in the uploaded data. Displaying pre-trained performance metrics. Upload data with ground truth for updated metrics." if y_true is None else "Note: Model performance metrics are based on the uploaded data with ground truth."
 
     return detailed_metrics, table, fig, alert_content, alert_history, metrics_fig, feedback, df_original['Sender_account'].dropna().unique(), False, False, False, False, False, model_performance_data, modeling_note
 
