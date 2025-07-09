@@ -1,4 +1,3 @@
-# Dashboard for AML/CFT monitoring using simulated data and top features; planned for live data and full features post-hire
 import os
 import base64
 import io
@@ -46,7 +45,6 @@ app.layout = html.Div([
     # Tab system for enhanced design and modeling page
     dbc.Tabs([
         dbc.Tab(label='Dashboard', tab_id='tab-dashboard', children=[
-            dcc.Interval(id='interval-component', interval=1*60*1000, n_intervals=0),
             dcc.Upload(
                 id='upload_data',
                 children=html.Button('Upload Live Data Feed', id='upload-button', style={'margin': '10px', 'backgroundColor': '#3498db', 'color': 'white', 'border': 'none', 'padding': '10px'}),
@@ -61,6 +59,7 @@ app.layout = html.Div([
             ),
             dcc.Dropdown(id='filter-sender', options=[], placeholder="Filter by Sender Account", style={'width': '200px', 'margin': '10px'}),
             dcc.Dropdown(id='filter-prediction', options=[{'label': 'All', 'value': 'all'}, {'label': 'Laundering', 'value': 1}, {'label': 'Not Laundering', 'value': 0}], value='all', style={'width': '200px', 'margin': '10px'}),
+            html.Button("Submit", id="submit-button", n_clicks=0, style={'margin': '10px', 'backgroundColor': '#2ecc71', 'color': 'white', 'border': 'none', 'padding': '10px'}),
             html.Button("Download Report", id="download-button", n_clicks=0, style={'margin': '10px', 'backgroundColor': '#2ecc71', 'color': 'white', 'border': 'none', 'padding': '10px'}),
             dcc.Download(id="download-data"),
             dcc.Loading(
@@ -128,17 +127,18 @@ app.layout = html.Div([
      Output('filter-sender', 'disabled'),
      Output('filter-prediction', 'disabled'),
      Output('download-button', 'disabled')],
-    [Input('upload_data', 'contents'), Input('interval-component', 'n_intervals')],
+    [Input('submit-button', 'n_clicks'),
+     Input('upload_data', 'contents'),
+     Input('model_selector', 'value'),
+     Input('filter-sender', 'value'),
+     Input('filter-prediction', 'value')],
     [State('upload_data', 'filename'),
-     State('model_selector', 'value'),
-     State('alert-history', 'data'),
-     State('filter-sender', 'value'),
-     State('filter-prediction', 'value')]
+     State('alert-history', 'data')]
 )
-def update_output(contents, n, filename, model_name, alert_history, sender_filter, pred_filter):
+def update_output(submit_n_clicks, contents, model_name, sender_filter, pred_filter, filename, alert_history):
     print(f"Processing file: {filename} at {datetime.datetime.now()}")
-    if contents is None or not models:
-        return ["Please upload a file or ensure models are available."], None, {}, None, alert_history, {}, html.P("No file uploaded yet.", style={'color': 'gray'}), [], False, False, False, False, False
+    if contents is None or not models or not submit_n_clicks:
+        return ["Please upload a file, select a model, and click Submit to load data.", html.P("Interpretation: Upload data and submit to see Precision (accuracy of positive predictions), Recall (capture of actual positives), F1 Score (balance of both), and Risk Score (percentage of flagged transactions). Modeling page scores are based on simulated data and may differ due to real-time data variations.")], None, {}, None, alert_history, {}, html.P("No file uploaded yet or submit not clicked.", style={'color': 'gray'}), [], False, False, False, False, False
 
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
@@ -147,7 +147,7 @@ def update_output(contents, n, filename, model_name, alert_history, sender_filte
         df = pd.read_csv(io.StringIO(decoded.decode('utf-8-sig')))
         feedback = html.P("Data uploaded successfully!", style={'color': 'green'})
     except Exception as e:
-        return [f"❌ Failed to parse CSV: {e}"], None, {}, None, alert_history, {}, html.P(f"Upload failed: {e}", style={'color': 'red'}), [], False, False, False, False, False
+        return [f"❌ Failed to parse CSV: {e}", html.P("Interpretation: Ensure the uploaded file is a valid CSV with required columns.")], None, {}, None, alert_history, {}, html.P(f"Upload failed: {e}", style={'color': 'red'}), [], False, False, False, False, False
 
     df_original = df.copy()
 
@@ -203,10 +203,10 @@ def update_output(contents, n, filename, model_name, alert_history, sender_filte
             y_true = df['Is_laundering'] if 'Is_laundering' in df.columns else None
             X = df.reindex(columns=TOP_FEATURES, fill_value=0)
         except Exception as e:
-            return [f"❌ Preprocessing failed: {e}"], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False
+            return [f"❌ Preprocessing failed: {e}", html.P("Interpretation: Check data integrity or column names.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False
 
     if X.shape[1] != len(TOP_FEATURES):
-        return [f"❌ Feature mismatch: Expected {len(TOP_FEATURES)} features, got {X.shape[1]}"], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False
+        return [f"❌ Feature mismatch: Expected {len(TOP_FEATURES)} features, got {X.shape[1]}", html.P("Interpretation: Ensure all required features are present in the uploaded data.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False
 
     print(f"X shape: {X.shape}")
     print(f"X columns: {X.columns.tolist()}")
@@ -216,7 +216,7 @@ def update_output(contents, n, filename, model_name, alert_history, sender_filte
 
     model = models.get(model_name)
     if model is None:
-        return [f"❌ Model {model_name} not loaded."], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False
+        return [f"❌ Model {model_name} not loaded.", html.P("Interpretation: Model loading failed; verify model files.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False
 
     try:
         if model_name == "HDBSCAN":
@@ -233,7 +233,7 @@ def update_output(contents, n, filename, model_name, alert_history, sender_filte
                 except:
                     pass  # Skip if predict_proba fails
     except Exception as e:
-        return [f"❌ Model prediction failed: {e}"], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False
+        return [f"❌ Model prediction failed: {e}", html.P("Interpretation: Prediction error; check model compatibility with data.")], None, {}, None, alert_history, {}, feedback, [], False, False, False, False, False
 
     print(f"y_pred distribution: {pd.Series(y_pred).value_counts()}")
     print(f"Unique predictions: {np.unique(y_pred)}")
@@ -250,27 +250,30 @@ def update_output(contents, n, filename, model_name, alert_history, sender_filte
             metrics = html.Div([
                 html.P("⚠️ Warning: Model may be overfitting due to imbalanced data.", style={'color': 'orange'}),
                 html.H4("Model Performance Metrics"),
-                html.P(f"Precision: {report['1']['precision']:.2f}"),
-                html.P(f"Recall: {report['1']['recall']:.2f}"),
-                html.P(f"F1 Score: {report['1']['f1-score']:.2f}"),
-                html.P(f"Risk Score: {risk_score:.1f}%"),
-                alert
+                html.P(f"Precision: {report['1']['precision']:.2f} (Accuracy of laundering predictions)"),
+                html.P(f"Recall: {report['1']['recall']:.2f} (Proportion of actual laundering caught)"),
+                html.P(f"F1 Score: {report['1']['f1-score']:.2f} (Balance of Precision and Recall)"),
+                html.P(f"Risk Score: {risk_score:.1f}% (Percentage of transactions flagged as laundering)"),
+                alert,
+                html.P("Note: Scores may differ from the Modeling page due to real-time data vs. simulated data used there.")
             ])
         else:
             metrics = html.Div([
                 html.H4("Model Performance Metrics"),
-                html.P(f"Precision: {report['1']['precision']:.2f}"),
-                html.P(f"Recall: {report['1']['recall']:.2f}"),
-                html.P(f"F1 Score: {report['1']['f1-score']:.2f}"),
-                html.P(f"Risk Score: {risk_score:.1f}%"),
-                alert
+                html.P(f"Precision: {report['1']['precision']:.2f} (Accuracy of laundering predictions)"),
+                html.P(f"Recall: {report['1']['recall']:.2f} (Proportion of actual laundering caught)"),
+                html.P(f"F1 Score: {report['1']['f1-score']:.2f} (Balance of Precision and Recall)"),
+                html.P(f"Risk Score: {risk_score:.1f}% (Percentage of transactions flagged as laundering)"),
+                alert,
+                html.P("Note: Scores may differ from the Modeling page due to real-time data vs. simulated data used there.")
             ])
     else:
         metrics = html.Div([
             html.H4("Prediction Summary"),
             html.P(f"{sum(y_pred)} transactions predicted as laundering."),
-            html.P(f"Risk Score: {risk_score:.1f}%"),
-            alert
+            html.P(f"Risk Score: {risk_score:.1f}% (Percentage of transactions flagged as laundering)"),
+            alert,
+            html.P("Interpretation: No ground truth available; Risk Score reflects model predictions only.")
         ])
 
     # Enhanced DataTable to include only available key transaction fields
